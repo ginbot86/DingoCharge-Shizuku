@@ -2,7 +2,8 @@
 https://ripitapart.com November 16, 2021.
 
 Version history:
-1.0.0: Initial public release (2022-06-30).]]
+1.0.0: Initial public release (2022-06-30).
+1.1.0: Fixed incorrect "Compile main" message. Should be "Compile menu" (2022-10-15).]]
 
 filePath = "0:/lua/user/DC4S/LibMenu-DC4S.lua"
 
