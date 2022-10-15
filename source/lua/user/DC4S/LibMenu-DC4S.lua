@@ -2,7 +2,13 @@
 https://ripitapart.com November 16, 2021.
 
 Version history:
-1.0.0: Initial public release (2022-06-30).]]
+1.0.0: Initial public release (2022-06-30).
+1.1.0: Fixed issue where setting cell count does not update precharge voltage. (2022-07-22).
+       Fixed issue where precharge voltage did not display (correctly) during charge. (2022-10-12).
+       Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
+       Added an option to display system temperature in Fahrenheit (2022-10-12).
+       Added 2.5V/cell and 8S cell configurations (2022-10-13).]]
+
 
 function checkConfigs()
   local returnStatus = false
@@ -34,6 +40,10 @@ function checkConfigs()
     screen.showDialog("Config Error",string.format("Invalid charge termdeadband!\n\n%.3fA >= 1.000A",tcDeadband),3000,true,color.red) 
   elseif (cableResistance >= 1) then
     screen.showDialog("Config Error",string.format("Invalid cable\nresistance!\n\n%.3fOhm >= 1.000",cableResistance),3000,true,color.red)     
+  elseif (ccFallbackRate >= 2) then
+    screen.showDialog("Config Error",string.format("Invalid CC fallbackrate!\n\n%.2fC >= 2.00C",ccFallbackRate),3000,true,color.red) 
+  elseif (ccFallbackRate < 1) then
+    screen.showDialog("Config Error",string.format("Invalid CC fallbackrate!\n\n%.2fC < 1.00C",ccFallbackRate),3000,true,color.red)     
   else
     returnStatus = true
   end
@@ -42,20 +52,26 @@ end
 
 function cfgCells()
   screen.clear()
-  local numCellsSel = screen.popMenu({string.format("Keep Current (%dS)",numCells),"1S","2S","3S","4S","5S","6S","7S"})
+  local numCellsSel = screen.popMenu({string.format("Keep Current (%dS)",numCells),"1S","2S","3S","4S","5S","6S","7S","8S"})
   if ((numCellsSel > 0) and (numCellsSel < 255)) then
     numCells = numCellsSel
   end
-  if ((voltsPerCell > 3.6) and (numCells == 1)) then
-    voltsPerCellPrecharge = 3.3 -- LiCoO2, NiCoMn, NiCoAl, LiNiO2, LiMn2O4 (typical "Li-ion"), but adjusted for PPS min 3.3V
+  if (voltsPerCell <= 3) then
+    voltsPerCellPrecharge = 1.5 -- LTO/Lithium Titanate
+  elseif (voltsPerCell <= 3.6) then
+    voltsPerCellPrecharge = 2.5 -- LiFePO4/Lithium Iron Phosphate
+  elseif ((voltsPerCell > 3.6) and (numCells > 1)) then
+    voltsPerCellPrecharge = 3 -- LiCoO2, NiCoMn, NiCoAl, LiNiO2, LiMn2O4 (typical "Li-ion")
+  else
+    voltsPerCellPrecharge = 3.3 -- LiCoO2 and others as above, but adjusted for PPS min 3.3V
   end
   screen.popHint(string.format("%dS",numCells),1000)
 end
 
 function cfgVpc()
   screen.clear()
-  local voltageTable = {2.7,2.8,2.85,2.9,3,3.2,3.4,3.5,3.6,3.65,3.7,3.8,3.85,4,4.1,4.15,4.2,4.25,4.3,4.35,4.4,4.45,4.5}
-  local vpcSel = screen.popMenu({string.format("Keep Current (%0.2fV)",voltsPerCell),"2.7V","2.8V","2.85V","2.9V","3.0V","3.2V","3.4V","3.5V","3.6V","3.65V","3.7V","3.8V","3.85V","4.0V","4.1V","4.15V","4.2V","4.25V","4.3V","4.35V","4.4V","4.45V","4.5V"})
+  local voltageTable = {2.5, 2.55, 2.6, 2.7,2.8,2.85,2.9,3,3.2,3.4,3.5,3.6,3.65,3.7,3.8,3.85,4,4.1,4.15,4.2,4.25,4.3,4.35,4.4,4.45,4.5}
+  local vpcSel = screen.popMenu({string.format("Keep Current (%0.2fV)",voltsPerCell),"2.5V","2.55V","2.6V","2.7V","2.8V","2.85V","2.9V","3.0V","3.2V","3.4V","3.5V","3.6V","3.65V","3.7V","3.8V","3.85V","4.0V","4.1V","4.15V","4.2V","4.25V","4.3V","4.35V","4.4V","4.45V","4.5V"})
 
   if ((vpcSel > 0) and (vpcSel < 255)) then
     voltsPerCell = voltageTable[vpcSel] 
@@ -74,8 +90,8 @@ end
 
 function cfgPChgVpc()
   screen.clear()
-  local voltageTable = {1.5,2.5,3,3.2,3.3,3.6}
-  local vpcSel = screen.popMenu({string.format("Keep Current (%0.2fV)",voltsPerCellPrecharge),"1.5V","2.5V","3.0V","3.2V","3.3V","3.6V"})
+  local voltageTable = {1.5,2.0,2.5,3,3.2,3.3,3.6}
+  local vpcSel = screen.popMenu({string.format("Keep Current (%0.2fV)",voltsPerCellPrecharge),"1.5V","2.0V","2.5V","3.0V","3.2V","3.3V","3.6V"})
   if ((vpcSel > 0) and (vpcSel < 255)) then
     voltsPerCellPrecharge = voltageTable[vpcSel]
   end
@@ -287,12 +303,12 @@ function cfgAggressiveGc()
   local gcMenuValue = " "
   while true do
     if isAggressiveGcEnabled then
-      gcMenuValue = string.format("Keep Current (%.0f kiB)", aggressiveGcThreshold / 1024)
+      gcMenuValue = string.format("Keep Current (%.0fK)", aggressiveGcThreshold / 1024)
     else
       gcMenuValue = "Keep Current (Disabled)"
     end  
     screen.clear()
-    aggressiveGcSel = screen.popMenu({gcMenuValue, "Disabled", "4 kiB", "8 kiB", "16 kiB", "32 kiB", "Run GC Now", "Restore Defaults"})
+    aggressiveGcSel = screen.popMenu({gcMenuValue, "Disabled", "4K", "8K", "16K", "32K", "Run GC Now", "Restore Defaults"})
     if aggressiveGcSel == 1 then
       isAggressiveGcEnabled = false
       break
@@ -328,7 +344,7 @@ function cfgAggressiveGc()
     end
   end
   if isAggressiveGcEnabled then
-    screen.popHint(string.format("%.0f kiB", aggressiveGcThreshold / 1024), 1000)
+    screen.popHint(string.format("%.0fK", aggressiveGcThreshold / 1024), 1000)
   else
     screen.popHint("Disabled", 1000)
   end
@@ -403,13 +419,77 @@ function cfgSounds()
   end
 end
 
+function cfgCcFallbackRate()
+  screen.clear()
+  local cfgCcFallbackSel = 0
+  local tmpCcRate = 0
+  
+  while true do
+    cfgCcFallbackSel = screen.popMenu({string.format("Keep Current (%.2fC)",ccFallbackRate),"Set CC Fallback Rate...", "Restore Defaults"})
+    tmpCcRate = ccFallbackRate
+    if cfgCcFallbackSel == 1 then
+      -- Integer, always >= 1C
+      tmpCcRate = 1
+      -- Tenths
+      tmpCcRate = tmpCcRate + (0.1 * screen.popMenu({string.format("%0.1fxC",tmpCcRate),string.format("%0.1fxC",tmpCcRate + 0.1),string.format("%0.1fxC",tmpCcRate + 0.2),string.format("%0.1fxC",tmpCcRate + 0.3),string.format("%0.1fxC",tmpCcRate + 0.4),string.format("%0.1fxC",tmpCcRate + 0.5),string.format("%0.1fxC",tmpCcRate + 0.6),string.format("%0.1fxC",tmpCcRate + 0.7),string.format("%0.1fxC",tmpCcRate + 0.8),string.format("%0.1fxC",tmpCcRate + 0.9)}))    
+     -- Hundredths
+      tmpCcRate = tmpCcRate + (0.01 * screen.popMenu({string.format("%0.2fC",tmpCcRate),string.format("%0.2fC",tmpCcRate + 0.01),string.format("%0.2fC",tmpCcRate + 0.02),string.format("%0.2fC",tmpCcRate + 0.03),string.format("%0.2fC",tmpCcRate + 0.04),string.format("%0.2fC",tmpCcRate + 0.05),string.format("%0.2fC",tmpCcRate + 0.06),string.format("%0.2fC",tmpCcRate + 0.07),string.format("%0.2fC",tmpCcRate + 0.08),string.format("%0.2fC",tmpCcRate + 0.09)}))  
+      break
+    elseif cfgCcFallbackSel == 2 then
+      if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
+        setCcFallbackDefaults()
+        screen.popHint("Defaults Restored", 1000)    
+      end
+    else
+      break
+    end
+  end
+  ccFallbackRate = tmpCcRate
+  screen.popHint(string.format("%0.2fC", ccFallbackRate), 1000)
+end
+
+function cfgTempDisplay()
+  local cfgTempDisplaySel = 0
+  local tempDisplayMenuValue = " "
+  while true do
+    if isTempDisplayF then
+      tempDisplayMenuValue = "\2" -- ºF
+    else
+      tempDisplayMenuValue = "\1" -- ºC
+    end
+    
+    cfgTempDisplaySel = screen.popMenu{string.format("Keep Current (%s)", tempDisplayMenuValue), "Show \1", "Show \2", "Restore Defaults"}
+    if cfgTempDisplaySel == 1 then
+      isTempDisplayF = false
+      break
+    elseif cfgTempDisplaySel == 2 then
+      isTempDisplayF = true
+      break
+    elseif cfgTempDisplaySel == 3 then
+      if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
+        setTemperatureDisplayDefaults()
+        screen.popHint("Defaults Restored", 1000)    
+      end
+    else
+      break
+    end
+  end
+  
+  if isTempDisplayF then
+    screen.popHint("Show F", 1000) -- ºF or ºC symbols are not in larger font
+  else
+    screen.popHint("Show C", 1000)
+  end
+end
+
 function advancedMenu()
   local advMenuSel = 0
   local gcMenuEntry = " "
   local soundMenuEntry = " "
+  local tempDisplayMenuEntry = " "
   while true do
     if isAggressiveGcEnabled then
-      gcMenuEntry = string.format("Aggressive GC: %.0f kiB", aggressiveGcThreshold/1024)
+      gcMenuEntry = string.format("Aggressive GC: %.0fK", aggressiveGcThreshold/1024)
     else
       gcMenuEntry = "Aggressive GC: Disabled"
     end
@@ -418,22 +498,31 @@ function advancedMenu()
     else
       soundMenuEntry = "System Sounds: Off"
     end
+    if isTempDisplayF then
+      tempDisplayMenuEntry = "Temperature Display: \2" -- degF
+    else
+      tempDisplayMenuEntry = "Temperature Display: \1" -- degC
+    end
     screen.clear()
-    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", "Chg Reg Deadband...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, "Restore All Defaults"})
+    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("CC Fallback: %.2fC", ccFallbackRate),"Chg Reg Deadband...",  tempDisplayMenuEntry, string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, "Restore All Defaults"})
     screen.clear()
     if advMenuSel == 1 then
       cfgPreChg()
     elseif advMenuSel == 2 then
-      cfgDeadband()
-    elseif advMenuSel == 3 then
       cfgCableRes()
+    elseif advMenuSel == 3 then
+      cfgCcFallbackRate()
     elseif advMenuSel == 4 then
-      cfgRefreshRate()
+      cfgDeadband() 
     elseif advMenuSel == 5 then
-      cfgAggressiveGc()
+      cfgTempDisplay()
     elseif advMenuSel == 6 then
-      cfgSounds()
+      cfgRefreshRate()
     elseif advMenuSel == 7 then
+      cfgAggressiveGc()
+    elseif advMenuSel == 8 then
+      cfgSounds()
+    elseif advMenuSel == 9 then
       if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
         resetAllDefaults()
         screen.popHint("Defaults Restored", 1000)
