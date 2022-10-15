@@ -2,7 +2,12 @@
 https://ripitapart.com November 16, 2021.
 
 Version history:
-1.0.0: Initial public release (2022-06-30).]]
+1.0.0: Initial public release (2022-06-30).
+1.1.0: Fixed issue where setting cell count does not update precharge voltage. (2022-07-22).
+       Fixed issue where precharge voltage did not display (correctly) during charge. (2022-10-12).
+       Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
+       Added an option to display system temperature in Fahrenheit (2022-10-12).
+       Added 2.5V/cell and 8S cell configurations (2022-10-13).]]
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
@@ -101,6 +106,21 @@ function setCableResistanceDefaults()
   cableResistance = 0
 end
 
+function setCcFallbackDefaults()
+  -- The algorithm can protect against excessive current draw when the charge
+  -- stage moves from constant-current (CC) to constant-voltage (CV) mode. If
+  -- the current flow exceeds (ccFallbackRate * chargeCurrent) then the stage
+  -- is sent back to CC mode from CV mode.
+  ccFallbackRate = 1.1
+end
+
+function setTemperatureDisplayDefaults()
+  -- During charging, DingoCharge displays the system temperature in the
+  -- MiscInfo section. The Lua API provides temperature in Celsius, but this
+  -- can be converted to Fahrenheit for locales that use it (e.g. USA).
+  isTempDisplayF = false
+end
+
 function resetAllDefaults()
   -- This function is called upon program initialization. All of the referenced
   -- functions above must be called here to ensure all settings are applied at
@@ -112,4 +132,6 @@ function resetAllDefaults()
   setAggressiveGcDefaults()
   setSystemSoundDefaults()
   setCableResistanceDefaults()
+  setCcFallbackDefaults()
+  setTemperatureDisplayDefaults()
 end

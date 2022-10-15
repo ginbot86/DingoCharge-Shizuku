@@ -37,7 +37,7 @@ if (screen.open() ~= screen.OK) then
   os.exit(-1)
 end
 
-screen.popHint("Compile main",1000,color.cyan)
+screen.popHint("Compile menu",1000,color.cyan)
 convertLua(filePath)
 
 os.exit(0)

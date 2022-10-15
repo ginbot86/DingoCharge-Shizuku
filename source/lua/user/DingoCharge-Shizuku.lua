@@ -3,9 +3,15 @@ Li-ion CC/CV Charger via USB-C PD PPS, by Jason Gin.
 https://ripitapart.com November 16, 2021.
 
 Version history:
-1.0.0: Initial public release (2022-06-30).]]
+1.0.0: Initial public release (2022-06-30).
+1.1.0: Fixed issue where setting cell count does not update precharge voltage. (2022-07-22).
+       Fixed issue where precharge voltage did not display (correctly) during charge. (2022-10-12).
+       Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
+       Added an option to display system temperature in Fahrenheit (2022-10-12).
+       Added 2.5V/cell and 8S cell configurations (2022-10-13).]]
 
-scriptVer = 1.0
+
+scriptVer = 1.1
 patchVer = 0
 
 -- Default settings are stored in a separate file:
@@ -59,7 +65,7 @@ end
 -- "123456789ABCDEFGHIJ" is maximum length of popYesOrNo or showDialog line, 19 chars
 -- "123456789ABCDEFGHIJKLMNO" is maximum length of popMenu line, 24 chars
 -- Weird spacing between words (or lack thereof) is to prevent line wrapping from occurring mid-word
--- Special characters: \1 = ºC, \2 = ºF, \3 = Ω (ohms only renders for font.f1212)
+-- Special characters: \1 = ºC, \2 = ºF, \3 = Ω (these glyphs only render for font.f1212)
 function testCompatibility(isPdClosedOnFinish)
   local isPdClosed = isPdClosedOnFinish or false
   screen.clear()
@@ -108,7 +114,7 @@ function testCompatibility(isPdClosedOnFinish)
       else
         pdSink.init()
         if (waitForSourceCap() == false) then
-          screen.showDialog("Test Failed", "Incompatible!\nNo USB PD support\n\nUnable to receive\nsource capability\nlist from adapter", 5000, true, color.red)
+          screen.showDialog("Test Failed", "Incompatible!\nNo USB PD support\n\nUnable to retrieve\nsource capability\nlist from adapter", 5000, true, color.red)
           closePdSession()
           return false      
         elseif (pdSink.getCCStatus() == pdSink.NO_SRC_ATTACHED) then
@@ -323,7 +329,7 @@ function startCharging()
               regLoopCurrent = termCRate * chargeCurrent
               regLoopVoltage = voltsPerCell * numCells
               setpointDeadband = cvDeadband
-              maxCurrent = chargeCurrent -- limit overshoot during CC-CV transition
+              maxCurrent = chargeCurrent -- limit overshoot during CC-CV transition, at least theoretically
             else
               regLoopCurrent = 0
             end
@@ -359,6 +365,15 @@ function startCharging()
           targetVoltage = targetVoltage - 0.04 -- safety check? one test run allowed a 4.2Vpc 3S battery to hit 4.35Vpc after several hours of idle!!!
         end
 
+        if chargeStage == 3 and meter.readCurrent() > (ccFallbackRate * chargeCurrent) then
+          chargeStage = 2 -- safety check? see if this helps with reducing current overshoot during CC-CV transition
+          regLoopMode = 0
+          regLoopCurrent = chargeCurrent
+          regLoopVoltage = voltsPerCell * numCells
+          setpointDeadband = ccDeadband
+        end
+        
+
         -- ensure requested voltage is within PDO bounds
         if (targetVoltage > maxVoltage) then
           targetVoltage = maxVoltage
@@ -387,7 +402,11 @@ function startCharging()
           if ((os.clock() - sessionTimerStart) % 10) < 5 then -- alternate between showing precharge voltage and current
             screen.showString(103, 9, string.format("PC %0.3fA", prechargeCRate * chargeCurrent), font.f1212, color.lightGreen)
           else
-            screen.showString(103, 9, string.format("PV %0.3fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen)
+            if ((voltsPerCellPrecharge * numCells) < 10) then
+              screen.showString(103, 9, string.format("PV %0.3fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen)
+            else
+              screen.showString(103, 9, string.format("PV %0.2fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen)
+            end
           end
           screen.showString(103, 21, string.format("CC %0.3fA", chargeCurrent), font.f1212, color.lightGreen)
           if ((voltsPerCell * numCells) < 10) then
@@ -404,9 +423,12 @@ function startCharging()
           screen.showString(97, 67, "-MiscInfo", font.f0508, color.lightPurple)
           updateSessionTimer()
           screen.showString(103, 76, string.format("%02.0f:%02.0f:%02.0f", math.floor((sessionTimerNow - sessionTimerStart) / 3600), math.floor(((sessionTimerNow - sessionTimerStart) % 3600)/60), math.floor(sessionTimerNow - sessionTimerStart) % 60), font.f1212, color.lightPurple) -- format total seconds to hh:mm:ss
-          screen.showString(103, 88, string.format("%0.2fVpd", targetVoltage), font.f1212, color.lightPurple)  
-          screen.showString(103, 101, string.format("%0.2f\1", sys.gBoardTempK()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
-
+          screen.showString(103, 88, string.format("%0.2fVpd", targetVoltage), font.f1212, color.lightPurple)
+          if isTempDisplayF then
+            screen.showString(103, 101, string.format("%0.2f\2", (sys.gBoardTempK() * 1.8) + 32), font.f1212, color.lightPurple)
+          else
+            screen.showString(103, 101, string.format("%0.2f\1", sys.gBoardTempK()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
+          end
           -- dynamic statusbar that changes periodically
           if ((os.clock() - sessionTimerStart) % 10) < 3.333 then
             printStatusbar(string.format("Free mem: %d/%d", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
