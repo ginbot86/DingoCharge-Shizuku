@@ -8,11 +8,12 @@ Version history:
        Fixed issue where precharge voltage did not display (correctly) during charge. (2022-10-12).
        Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
        Added an option to display system temperature in Fahrenheit (2022-10-12).
-       Added 2.5V/cell and 8S cell configurations (2022-10-13).]]
+       Added 2.5V/cell and 8S cell configurations (2022-10-13).
+1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).]]
 
 
 scriptVer = 1.1
-patchVer = 0
+patchVer = 1
 
 -- Default settings are stored in a separate file:
 require "lua/user/DC4S/UserDefaults-DC4S"
@@ -329,7 +330,6 @@ function startCharging()
               regLoopCurrent = termCRate * chargeCurrent
               regLoopVoltage = voltsPerCell * numCells
               setpointDeadband = cvDeadband
-              maxCurrent = chargeCurrent -- limit overshoot during CC-CV transition, at least theoretically
             else
               regLoopCurrent = 0
             end
