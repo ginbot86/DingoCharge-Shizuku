@@ -8,7 +8,8 @@ Version history:
        Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
        Added an option to display system temperature in Fahrenheit (2022-10-12).
        Added 2.5V/cell and 8S cell configurations (2022-10-13).
-1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).]]
+1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
+1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).]]
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
