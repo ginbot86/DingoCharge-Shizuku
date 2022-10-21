@@ -8,8 +8,8 @@ Version history:
        Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
        Added an option to display system temperature in Fahrenheit (2022-10-12).
        Added 2.5V/cell and 8S cell configurations (2022-10-13).
-1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).]]
-
+1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
+1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).]]
 
 function checkConfigs()
   local returnStatus = false
@@ -17,8 +17,8 @@ function checkConfigs()
     screen.showDialog("Config Error",string.format("Invalid charging\ncurrent!\n\n%.3fA <= 0.000A",chargeCurrent),3000,true,color.red)
   elseif (chargeCurrent > 5) then
     screen.showDialog("Config Error",string.format("Invalid charging\ncurrent!\n\n%.3fA > 5.000A",chargeCurrent),3000,true,color.red)
-  elseif (numCells > 7) then
-    screen.showDialog("Config Error",string.format("Invalid cell count!\n\n%dS > 7S",numCells),3000,true,color.red)
+  elseif (numCells > 8) then
+    screen.showDialog("Config Error",string.format("Invalid cell count!\n\n%dS > 8S",numCells),3000,true,color.red)
   elseif (numCells <= 0) then
     screen.showDialog("Config Error",string.format("Invalid cell count!\n\n%dS <= 0S",numCells),3000,true,color.red)   
   elseif (termCRate > 1) then
