@@ -9,7 +9,10 @@ Version history:
        Added an option to display system temperature in Fahrenheit (2022-10-12).
        Added 2.5V/cell and 8S cell configurations (2022-10-13).
 1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
-1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).]]
+1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
+1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
+       Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
@@ -66,67 +69,79 @@ function setDeadbandDefaults()
   --   For example, if cvDeadband is 50 mV, the algorithm will switch when the
   --   voltage is [voltsPerCell * numCells] - 50 mV. This causes a temporary
   --   overshoot in current but is limited in amount and duration (often less
-  --   than 10% for a couple minutes).
+  --   than 10% for a couple minutes), but if it is too high then charging will
+  --   fall back to constant-current mode; see setCcFallbackDefaults() below.
   --   This can be helpful when the adapter is unable to fully reach its
   --   maximum reported voltage (in testing, 3 of 3 "21V" capable adapters only
   --   produced 19.95V~20.5V, preventing use with 5S Li-ion packs unless 
   --   4V/cell is selected).
   pcDeadband = 0.01 -- Amps, precharge mode
-  ccDeadband = 0.025 -- Amps, constant-current mode
+  ccDeadbandNormal = 0.025 -- Amps, constant-current mode
+  ccDeadbandLow = 0.01 -- Amps, constant-current mode for lower currents
+  ccDeadbandThreshold = 0.5 -- Amps, use low deadband if current <= threshold
   cvDeadband = 0.01 -- Volts, constant-voltage mode
   tcDeadband = 0.01 -- Amps, end-of-charge mode
+  
+  -- CAUTION: Do not change the rest of the code in this section.
+  if (chargeCurrent <= ccDeadbandThreshold) then
+    ccDeadband = ccDeadbandLow
+  else
+    ccDeadband = ccDeadbandNormal
+  end
 end
 
 function setAggressiveGcDefaults()
   -- If enabled, Lua's collectgarbage() will be forced if free RAM is below
-  -- this threshold. This check occurs during every charge regulation loop
-  -- iteration. (Yes, this is a pretty blunt approach, but it works and it
-  -- keeps the system stable...)
+  --   this threshold. This check occurs during every charge regulation loop
+  --   iteration. (Yes, this is a pretty blunt approach, but it works and it
+  --   keeps the system stable...)
   -- Note: Although the option is provided to disable this behaviour, doing
-  -- so will severely impact stability (the system will likely hang, or crash
-  -- with an out-of-memory dialog within minutes or hours when running the main
-  -- charging/UI loop).
+  --   so will severely impact stability (the system will likely hang, or crash
+  --   with an out-of-memory dialog within minutes or hours when running the
+  --   main charging/UI loop).
   aggressiveGcThreshold = 16384 -- bytes
   isAggressiveGcEnabled = true -- should be true for proper program operation
 end
 
 function setSystemSoundDefaults()
   -- The Shizuku sound API is used to sound a beep on the splash screen, if a
-  -- PD request fails, and when charging is finished (transition from CV to
-  -- TC charge stage).
+  --   PD request fails, and when charging is finished (transition from CV to
+  --   TC charge stage).
   isSystemSoundsEnabled = true
 end
 
 function setCableResistanceDefaults()
   -- The algorithm can compensate for additional cable resistance between the
-  -- tester and the battery, which will raise the CC-to-CV threshold voltage
-  -- and CV voltage by (current * cableResistance). The algorithm inherently
-  -- compensates for resistance and offset from the adapter to the tester
-  -- without the need to define it manually.
+  --   tester and the battery, which will raise the CC-to-CV threshold voltage
+  --   and CV voltage by (current * cableResistance). The algorithm inherently
+  --   compensates for resistance and offset from the adapter to the tester
+  --   without the need to define it manually.
   -- Note: it is not recommended to overcompensate for downstream resistance
-  -- as it poses a risk of damaging the battery through overvoltage/overcharge.
+  --   as it poses a risk of damaging the battery through overvoltage. A safe
+  --   value is about half of the calculated downstream resistance:
+  --   cableResistance = (Vbus_meter - Vbat) / Icharge
   cableResistance = 0
 end
 
 function setCcFallbackDefaults()
   -- The algorithm can protect against excessive current draw when the charge
-  -- stage moves from constant-current (CC) to constant-voltage (CV) mode. If
-  -- the current flow exceeds (ccFallbackRate * chargeCurrent) then the stage
-  -- is sent back to CC mode from CV mode.
+  --   stage moves from constant-current (CC) to constant-voltage (CV) mode. If
+  --   the current flow exceeds (ccFallbackRate * chargeCurrent) then the stage
+  --   is sent back to CC mode from CV mode.
   ccFallbackRate = 1.1
 end
 
 function setTemperatureDisplayDefaults()
   -- During charging, DingoCharge displays the system temperature in the
-  -- MiscInfo section. The Lua API provides temperature in Celsius, but this
-  -- can be converted to Fahrenheit for locales that use it (e.g. USA).
+  --   MiscInfo section. The Lua API provides temperature in Celsius, but this
+  --   can be converted to Fahrenheit for locales that use it (e.g. USA).
   isTempDisplayF = false
 end
 
 function resetAllDefaults()
   -- This function is called upon program initialization. All of the referenced
-  -- functions above must be called here to ensure all settings are applied at
-  -- startup.
+  --   functions above must be called here to ensure all settings are applied
+  --   during startup.
   setDefaults()
   setPChgDefaults()
   setRefreshDefaults()

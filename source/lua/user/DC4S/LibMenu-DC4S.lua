@@ -9,7 +9,10 @@ Version history:
        Added an option to display system temperature in Fahrenheit (2022-10-12).
        Added 2.5V/cell and 8S cell configurations (2022-10-13).
 1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
-1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).]]
+1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
+1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
+       Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
 
 function checkConfigs()
   local returnStatus = false
@@ -116,10 +119,10 @@ function cfgCurr()
     tmpCurr = tmpCurr + (0.001 * screen.popMenu({string.format("%0.3fA",tmpCurr),string.format("%0.3fA",tmpCurr + 0.001),string.format("%0.3fA",tmpCurr + 0.002),string.format("%0.3fA",tmpCurr + 0.003),string.format("%0.3fA",tmpCurr + 0.004),string.format("%0.3fA",tmpCurr + 0.005),string.format("%0.3fA",tmpCurr + 0.006),string.format("%0.3fA",tmpCurr + 0.007),string.format("%0.3fA",tmpCurr + 0.008),string.format("%0.3fA",tmpCurr + 0.009)}))   
   end
   chargeCurrent = tmpCurr
-  if (chargeCurrent <= 0.5) then -- smaller deadband for low charge currents
-    ccDeadband = 0.01
+  if (chargeCurrent <= ccDeadbandThreshold) then -- smaller deadband for lower charge currents
+    ccDeadband = ccDeadbandLow
   else
-    ccDeadband = 0.025
+    ccDeadband = ccDeadbandNormal
   end
   screen.popHint(string.format("%0.3fA", chargeCurrent), 1000)
 end
@@ -233,24 +236,32 @@ function cfgDeadbandEntry(varSel)
   if (varSel == 1) then -- precharge
     varValue = pcDeadband
     varUnit = "A"
-    varType = "Precharge"
-  elseif (varSel == 2) then -- constant current
+    varType = "Precharge Dband"
+  elseif (varSel == 2) then -- constant current normal
+    varValue = ccDeadbandNormal
+    varUnit = "A"
+    varType = "CC Norm Dband"  
+  elseif (varSel == 3) then -- constant current low
     varValue = ccDeadband
     varUnit = "A"
-    varType = "CC Mode"  
-  elseif (varSel == 3) then -- constant voltage
+    varType = "CC Low Dband"
+  elseif (varSel == 4) then -- constant current normal/low decision threshold
+    varValue = ccDeadbandThreshold
+    varUnit = "A"
+    varType = "CC Low Thresh"
+  elseif (varSel == 5) then -- constant voltage
     varValue = cvDeadband
     varUnit = "V"
-    varType = "CV Mode"
-  elseif (varSel == 4) then -- terminate charge/current
+    varType = "CV Dband"
+  elseif (varSel == 6) then -- terminate charge/current
     varValue = tcDeadband
     varUnit = "A"
-    varType = "Chg Term"
+    varType = "Chg Term Dband"
   else
     return
   end
   
-  local dbndSel = screen.popMenu({string.format("Keep Current (%.3f%s)",varValue,varUnit),string.format("Set %s Dband...",varType)})
+  local dbndSel = screen.popMenu({string.format("Keep Current (%.3f%s)",varValue,varUnit),string.format("Set %s...",varType)})
   if dbndSel == 1 then
     -- Integer, always <1
     varValue = 0
@@ -266,29 +277,38 @@ function cfgDeadbandEntry(varSel)
   if (varSel == 1) then
     pcDeadband = varValue
   elseif (varSel == 2) then
-    ccDeadband = varValue
+    ccDeadbandNormal = varValue
   elseif (varSel == 3) then
-    cvDeadband = varValue
+    ccDeadbandLow = varValue
   elseif (varSel == 4) then
+    ccDeadbandThreshold = varValue
+  elseif (varSel == 5) then
+    cvDeadband = varValue
+  elseif (varSel == 6) then
     tcDeadband = varValue
   else
     return
   end
+  if (chargeCurrent <= ccDeadbandThreshold) then
+    ccDeadband = ccDeadbandLow
+  else
+    ccDeadband = ccDeadbandNormal
+  end
 end
 
 function cfgDeadband()
-  local hystCfgSel = 0
+  local dbandCfgSel = 0
   while true do
     screen.clear()
-    hystCfgSel = screen.popMenu({"<       Advanced...     ", string.format("Precharge Dband: %0.3fA",pcDeadband), string.format("CC Mode Dband: %0.3fA",ccDeadband), string.format("CV Mode Dband: %0.3fV",cvDeadband), string.format("Chg Term Dband: %0.3fA",tcDeadband), "Restore Defaults"})
+    dbandCfgSel = screen.popMenu({"<       Advanced...     ", string.format("Precharge Dband: %0.3fA",pcDeadband), string.format("CC Norm Dband: %0.3fA",ccDeadbandNormal), string.format("CC Low Dband: %0.3fA",ccDeadbandLow), string.format("CC Low Thresh: %.3fA",ccDeadbandThreshold), string.format("CV Dband: %0.3fV",cvDeadband), string.format("Chg Term Dband: %0.3fA",tcDeadband), "Restore Defaults"})
     screen.clear()
-    if (hystCfgSel == 5) then
+    if (dbandCfgSel == 7) then
       if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
         setDeadbandDefaults()
         screen.popHint("Defaults Restored", 1000)
       end
-    elseif (hystCfgSel > 0) then
-      cfgDeadbandEntry(hystCfgSel)
+    elseif (dbandCfgSel > 0 and dbandCfgSel < 255) then
+      cfgDeadbandEntry(dbandCfgSel)
     else
       break
     end
