@@ -10,11 +10,14 @@ Version history:
        Added an option to display system temperature in Fahrenheit (2022-10-12).
        Added 2.5V/cell and 8S cell configurations (2022-10-13).
 1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
-1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).]]
+1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
+1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
+       Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
 
 
-scriptVer = 1.1
-patchVer = 2
+scriptVer = 1.2
+patchVer = 0
 
 -- Default settings are stored in a separate file:
 require "lua/user/DC4S/UserDefaults-DC4S"
@@ -82,18 +85,22 @@ function testCompatibility(isPdClosedOnFinish)
         return false
       end
     end
-
+    
+    while (meter.readVoltage() < 4.5) do
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.alarm)
+      end
+      if screen.popYesOrNo("Adapter is not\nplugged in!\n\n* Confirm: go back\n* Cancel: retry", color.red) then
+        return false
+      end
+    end
+    
     screen.showDialog("Compatibility Test","", 0, true, color.cyan)
     screen.showString(12, 32, "Communicating with the", font.f1212, color.cyan)
     screen.showString(12, 46, "adapter. This may take", font.f1212, color.cyan)
     screen.showString(12, 58, "a few seconds...", font.f1212, color.cyan)
     screen.showString(12, 82, "Do not connect battery", font.f1212, color.orange)
     screen.showString(12, 94, "until prompted to!", font.f1212, color.orange)
-    
-    if (meter.readVoltage() < 4.5) then
-      screen.showDialog("Test Failed", "Adapter is not\nplugged in!", 3000, true, color.red)
-      return false
-    end
     
     if (fastChgTrig.open() ~= fastChgTrig.OK) then
       screen.showDialog("Internal Error", "Failed to open\nfastChgTrig module!\nTry power cycling\nor rebooting tester", 5000, true, color.red)
@@ -362,12 +369,12 @@ function startCharging()
           end
         end
         
-        if (chargeStage == 4 or chargeStage == 0) and meter.readVoltage() > voltsPerCell * numCells then
-          targetVoltage = targetVoltage - 0.04 -- safety check? one test run allowed a 4.2Vpc 3S battery to hit 4.35Vpc after several hours of idle!!!
+        if (chargeStage == 4 or chargeStage == 0) and meter.readVoltage() > voltsPerCell * numCells then -- safety check: prevent voltage from drifting too high after charge termination
+          targetVoltage = targetVoltage - 0.04
         end
 
-        if chargeStage == 3 and meter.readCurrent() > (ccFallbackRate * chargeCurrent) then
-          chargeStage = 2 -- safety check? see if this helps with reducing current overshoot during CC-CV transition
+        if chargeStage == 3 and meter.readCurrent() > (ccFallbackRate * chargeCurrent) then -- safety check: prevent excessive current overshoot when switching from CC to CV stage
+          chargeStage = 2
           regLoopMode = 0
           regLoopCurrent = chargeCurrent
           regLoopVoltage = voltsPerCell * numCells
