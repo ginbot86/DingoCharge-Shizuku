@@ -12,7 +12,18 @@ Version history:
 1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
 1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
        Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
-       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).
+1.3.0: Fixed issue where 3.65Vpc was considered standard Li-ion in terms of precharge voltage instead of LiFePO4 (2022-11-17).
+       Added test to verify configuration immediately upon startup (2022-12-12).
+       Added memory cleanup routine after reading PDOs from adapter (2022-12-12).
+       Changed internal version format (2022-12-12).
+       Added statusbar override support for charge termination/faults (2022-12-13).
+       Added support for TMP3x/LM35/LM50 external temperature sensor on D+ pin (2022-12-13).
+       Added optional over/undertemperature protection when using external sensor (2022-12-13).
+       Added charge timeout protection (2022-12-13).
+       Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
+       Added second menu library file due to RAM space exhaustion (2022-12-13).
+       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).]]
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
@@ -99,7 +110,7 @@ function setAggressiveGcDefaults()
   --   so will severely impact stability (the system will likely hang, or crash
   --   with an out-of-memory dialog within minutes or hours when running the
   --   main charging/UI loop).
-  aggressiveGcThreshold = 16384 -- bytes
+  aggressiveGcThreshold = 4096 -- bytes
   isAggressiveGcEnabled = true -- should be true for proper program operation
 end
 
@@ -138,6 +149,33 @@ function setTemperatureDisplayDefaults()
   isTempDisplayF = false
 end
 
+function setExternalTemperatureDefaults()
+  -- The algorithm can stop charging if an external temperature sensor on the
+  --   D+ pin (for example, a TMP35/LM35, TMP36/LM50 or TMP37) exceeds a preset
+  --   threshold, and optionally resume charging once the temperature problem
+  --   subsides. Hysteresis prevents the algorithm from oscillating in and out
+  --   of a temperature fault state too quickly.
+  isExternalTemperatureEnabled = false -- false disables all temperature protections
+  externalTemperatureOffsetVoltage = -0.5 -- 0V for TMP35/TMP37, -0.5V for TMP36
+  externalTemperatureGain = 100 -- 100x for 10mV/degC (TMP35, TMP36), 50x for 20mV/degC (TMP37)
+
+  temperatureProtectionHysteresisC = 10 -- temperature must cool down/warm up past the protection threshold before charge resumes
+  isOvertemperatureEnabled = true -- only if isExternalTemperatureEnabled is true
+  isOvertemperatureRecoveryEnabled = true
+  overtemperatureThresholdC = 50 -- if external temperature is greater than this value, stop charging
+  
+  isUndertemperatureEnabled = true -- only if isExternalTemperatureEnabled is true
+  isUndertemperatureRecoveryEnabled = true
+  undertemperatureThresholdC = 0 -- if external temperature is less than this value, stop charging
+end
+
+function setTimeLimitDefaults()
+  -- The algorithm can stop charging if the process takes too long. Setting the
+  --   time limit to 0 will disable timeout protection, as will setting the
+  --   charge termination rate to 0.
+  timeLimitHours = 24 -- set to 0 to disable
+end
+
 function resetAllDefaults()
   -- This function is called upon program initialization. All of the referenced
   --   functions above must be called here to ensure all settings are applied
@@ -151,4 +189,6 @@ function resetAllDefaults()
   setCableResistanceDefaults()
   setCcFallbackDefaults()
   setTemperatureDisplayDefaults()
+  setExternalTemperatureDefaults()
+  setTimeLimitDefaults()
 end
