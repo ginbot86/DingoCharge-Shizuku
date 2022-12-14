@@ -13,17 +13,29 @@ Version history:
 1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
 1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
        Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
-       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).
+1.3.0: Fixed issue where 3.65Vpc was considered standard Li-ion in terms of precharge voltage instead of LiFePO4 (2022-11-17).
+       Added test to verify configuration immediately upon startup (2022-12-12).
+       Added memory cleanup routine after reading PDOs from adapter (2022-12-12).
+       Changed internal version format (2022-12-12).
+       Added statusbar override support for charge termination/faults (2022-12-13).
+       Added support for TMP3x/LM35/LM50 external temperature sensor on D+ pin (2022-12-13).
+       Added optional over/undertemperature protection when using external sensor (2022-12-13).
+       Added charge timeout protection (2022-12-13).
+       Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
+       Added second menu library file due to RAM space exhaustion (2022-12-13).
+       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).]]
 
-
-scriptVer = 1.2
-patchVer = 0
+scriptVerMajor = 1
+scriptVerMinor = 3
+scriptPatchVer = 0
 
 -- Default settings are stored in a separate file:
 require "lua/user/DC4S/UserDefaults-DC4S"
 
--- Configuration menus are stored in a separate file:
+-- Configuration menus are stored in separate files:
 require "lua/user/DC4S/LibMenu-DC4S"
+require "lua/user/DC4S/LibMenu2-DC4S"
 
 -- Functions
 
@@ -65,6 +77,10 @@ end
 function closePdSession()
   pdSink.deinit()
   fastChgTrig.close()
+end
+
+function readExternalTemperatureCelsius()
+  return externalTemperatureGain * (meter.readDP() + externalTemperatureOffsetVoltage) -- offset is applied before gain
 end
 
 -- "123456789ABCDEFGHIJ" is maximum length of popYesOrNo or showDialog line, 19 chars
@@ -162,6 +178,9 @@ function testCompatibility(isPdClosedOnFinish)
         end
       end
     end
+    pdos = nil -- discard the PDO table since we don't need it anymore
+    collectgarbage("collect") -- clean up memory
+    
     if (numPpsPdos > 0) then
       if (bestPdo == -1) then -- note: the "too high" or "too low" refers to the PD requested voltage/current vs. what the adapter supports as per PDO(s)
       -- if multiple incompatibilities are found, then only the first matching incompatibility in this list will be shown
@@ -245,10 +264,14 @@ end
 
 function resumeSessionTimer()
   isSessionTimerEnabled = true
+  sessionTimerNow = os.clock()
 end
 
 function updateSessionTimer()
   if isSessionTimerEnabled then
+    sessionTimerNow = os.clock()
+  else
+    sessionTimerStart = sessionTimerStart + (os.clock() - sessionTimerNow) -- advance start timer to compensate for time spent while session timer stopped
     sessionTimerNow = os.clock()
   end
 end
@@ -320,6 +343,10 @@ function startCharging()
       isChargeStarted = true
       timerFineStart = sys.gTick()
       timerFineNow = sys.gTick() + 2000 -- allow screen to be updated on first loop iteration
+      isStatusbarOverridden = false
+      isOvertemperatureFault = false
+      isUndertemperatureFault = false
+      lastChargeStage = 0
       
       while true do -- main program/UI loop
 
@@ -354,11 +381,23 @@ function startCharging()
             if isSystemSoundsEnabled then
               buzzer.system(sysSound.finished)
             end
+            isStatusbarOverridden = true
+            statusbarOverrideColor = color.green
+            statusbarOverrideText = "Charge complete"
           end
           setpointDeviation = meter.readVoltage() - regLoopVoltage - (readCurrentSigned() * cableResistance)
         else  -- this should never happen
+        chargeStage = 0
         regLoopMode = 0
         regLoopCurrent = 0
+        setpointDeadband = tcDeadband
+        isStatusbarOverridden = true
+        statusbarOverrideColor = color.red        
+        statusbarOverrideText = "Error: Invalid loop mode"
+        if isSystemSoundsEnabled then
+          buzzer.system(sysSound.alarm)
+        end
+        stopSessionTimer()
         end
         
         if (math.abs(setpointDeviation) > setpointDeadband) then
@@ -381,6 +420,76 @@ function startCharging()
           setpointDeadband = ccDeadband
         end
         
+        if chargeStage > 0 and chargeStage < 4 and isExternalTemperatureEnabled and ((isOvertemperatureEnabled and readExternalTemperatureCelsius() > overtemperatureThresholdC) or (isUndertemperatureEnabled and readExternalTemperatureCelsius() < undertemperatureThresholdC)) then -- safety check: prevent battery from charging if temperature out of range
+          lastChargeStage = chargeStage
+          chargeStage = 0
+          regLoopMode = 0
+          regLoopCurrent = 0
+          setpointDeadband = tcDeadband
+          isStatusbarOverridden = true
+          statusbarOverrideColor = color.red
+          if readExternalTemperatureCelsius() > overtemperatureThresholdC - temperatureProtectionHysteresisC then
+            isOvertemperatureFault = true
+            statusbarOverrideText = "Error: Overtemperature"    
+          elseif readExternalTemperatureCelsius() < undertemperatureThresholdC + temperatureProtectionHysteresisC then
+            isUndertemperatureFault = true
+            statusbarOverrideText = "Error: Undertemperature"
+          else
+            statusbarOverrideText = "Error: Temperature fault" -- if somehow the temperature fixes itself as we try to determine what the fault was
+            isOvertemperatureFault = true
+            isUndertemperatureFault = true -- set both because the exact temperature fault was "forgotten"
+          end
+          if isSystemSoundsEnabled then
+            buzzer.system(sysSound.alarm)
+          end
+          stopSessionTimer()
+        end
+        
+        if chargeStage > 1 and chargeStage < 4 and termCRate > 0 and timeLimitHours > 0 and ((sessionTimerNow - sessionTimerStart) / 3600) > timeLimitHours then -- safety check: stop charging if it's taking too long to finish
+          chargeStage = 0
+          regLoopMode = 0
+          regLoopCurrent = 0
+          setpointDeadband = tcDeadband
+          isStatusbarOverridden = true
+          statusbarOverrideColor = color.red
+          statusbarOverrideText = string.format("Error: Timed out (%dh)", timeLimitHours)
+          if isSystemSoundsEnabled then
+            buzzer.system(sysSound.alarm)
+          end
+          stopSessionTimer()          
+        end
+        
+        if chargeStage == 0 and ((isOvertemperatureFault and isOvertemperatureRecoveryEnabled) or (isUndertemperatureFault and isUndertemperatureRecoveryEnabled)) then
+          if (isOvertemperatureFault and readExternalTemperatureCelsius() < overtemperatureThresholdC - temperatureProtectionHysteresisC) or (isUndertemperatureFault and readExternalTemperatureCelsius() > undertemperatureThresholdC + temperatureProtectionHysteresisC) then -- if recovery is enabled, resume charging if the conditions are met
+            if isOvertemperatureFault then
+              isOvertemperatureFault = false
+            elseif isUndertemperatureFault then
+              isUndertemperatureFault = false
+            end
+            resumeSessionTimer()
+              
+            isStatusbarOverridden = false
+            if lastChargeStage == 1 then
+              chargeStage = 1 -- precharge
+              regLoopMode = 0 -- CC mode, 1 for CV
+              setpointDeadband = pcDeadband
+              regLoopCurrent = prechargeCRate * chargeCurrent
+              regLoopVoltage = voltsPerCellPrecharge * numCells
+            elseif lastChargeStage == 2 then
+              chargeStage = 2 -- CC
+              regLoopMode = 0
+              regLoopCurrent = chargeCurrent
+              regLoopVoltage = voltsPerCell * numCells
+              setpointDeadband = ccDeadband
+            elseif lastChargeStage == 3 then
+              chargeStage = 3
+              regLoopMode = 1
+              regLoopCurrent = termCRate * chargeCurrent
+              regLoopVoltage = voltsPerCell * numCells
+              setpointDeadband = cvDeadband
+            end
+          end
+        end
 
         -- ensure requested voltage is within PDO bounds
         if (targetVoltage > maxVoltage) then
@@ -433,21 +542,33 @@ function startCharging()
           screen.showString(103, 76, string.format("%02.0f:%02.0f:%02.0f", math.floor((sessionTimerNow - sessionTimerStart) / 3600), math.floor(((sessionTimerNow - sessionTimerStart) % 3600)/60), math.floor(sessionTimerNow - sessionTimerStart) % 60), font.f1212, color.lightPurple) -- format total seconds to hh:mm:ss
           screen.showString(103, 88, string.format("%0.2fVpd", targetVoltage), font.f1212, color.lightPurple)
           if isTempDisplayF then
-            screen.showString(103, 101, string.format("%0.2f\2", (sys.gBoardTempK() * 1.8) + 32), font.f1212, color.lightPurple)
+            if isExternalTemperatureEnabled then
+              screen.showString(97, 101, string.format("%+0.2f\2ex", (readExternalTemperatureCelsius() * 1.8) + 32), font.f1212, color.lightPurple)
+            else
+              screen.showString(97, 101, string.format("%+0.2f\2in", (sys.gBoardTempK() * 1.8) + 32), font.f1212, color.lightPurple)
+            end
           else
-            screen.showString(103, 101, string.format("%0.2f\1", sys.gBoardTempK()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
+            if isExternalTemperatureEnabled then
+              screen.showString(97, 101, string.format("%+0.2f\1ex", readExternalTemperatureCelsius()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
+            else  
+              screen.showString(97, 101, string.format("%+0.2f\1in", sys.gBoardTempK()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
+            end
           end
           -- dynamic statusbar that changes periodically
-          if ((os.clock() - sessionTimerStart) % 10) < 3.333 then
-            printStatusbar(string.format("Free mem: %d/%d", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
-          elseif ((os.clock() - sessionTimerStart) % 10) < 6.667 then
-            printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
-          else
-            if regLoopMode == 1 then
-              printStatusbar(string.format("Setpoint: %.3f/%.3fV", setpointDeviation, setpointDeadband), color.grey, color.grey)
+          if not isStatusbarOverridden then
+            if ((os.clock() - sessionTimerStart) % 10) < 3.333 then
+              printStatusbar(string.format("Free mem: %d/%d", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
+            elseif ((os.clock() - sessionTimerStart) % 10) < 6.667 then
+              printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
             else
-              printStatusbar(string.format("Setpoint: %.3f/%.3fA", setpointDeviation, setpointDeadband), color.grey, color.grey)
+              if regLoopMode == 1 then
+                printStatusbar(string.format("Setpoint: %.3f/%.3fV", setpointDeviation, setpointDeadband), color.grey, color.grey)
+              else
+                printStatusbar(string.format("Setpoint: %.3f/%.3fA", setpointDeviation, setpointDeadband), color.grey, color.grey)
+              end
             end
+          else
+            printStatusbar(statusbarOverrideText, statusbarOverrideColor, statusbarOverrideColor)
           end
           
           -- flush updated framebuffer contents to screen, and reset the fine timer so we can wait until it's time to update the screen again
@@ -479,6 +600,11 @@ if (screen.open() ~= screen.OK) then
   os.exit(-1)
 end
 resetAllDefaults()
+
+if not checkConfigs() then -- check if configuration is valid
+  os.exit(-1)
+end
+
 if isSystemSoundsEnabled then
   buzzer.system(sysSound.started)
 end
@@ -488,8 +614,13 @@ screen.clear()
 timerFineStart = sys.gTick()
 timerFineNow = sys.gTick()
 isChargeStarted = false
+isStatusbarOverridden = false
+statusbarOverrideColor = color.red
+statusbarOverrideText = "oops uwu" -- will only appear if override text is not defined before displaying it
 
-screen.popHint(string.format("DingoCharge v%0.1f", scriptVer), 1000)
+screen.popHint(string.format("DingoCharge v%d.%d", scriptVerMajor, scriptVerMinor), 1000)
+
+collectgarbage("collect") -- clean up memory after all configs loaded
 
 while true do
   screen.clear()
@@ -505,7 +636,7 @@ while true do
   elseif mainMenuSel == 2 then
     advancedMenu()
   elseif mainMenuSel == 3 then
-    if (screen.popMenu({"<       Main Menu       ", "DingoCharge for Shizuku", "Script By Jason Gin", "ripitapart.com","(C) 2021-2022", string.format("Version: v%0.1f.%d", scriptVer, patchVer), ":3"}) == 6) then
+    if (screen.popMenu({"<       Main Menu       ", "DingoCharge for Shizuku", "Script by Jason Gin", "ripitapart.com","(C) 2021-2022", string.format("Version: v%d.%d.%d", scriptVerMajor, scriptVerMinor, scriptPatchVer), ":3"}) == 6) then
       screen.popHint("OwO", 1000, color.green) -- what's this? (it's an Easter egg! :3)
     end
   elseif mainMenuSel == 4 then

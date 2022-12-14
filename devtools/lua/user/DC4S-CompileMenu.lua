@@ -3,9 +3,11 @@ https://ripitapart.com November 16, 2021.
 
 Version history:
 1.0.0: Initial public release (2022-06-30).
-1.1.0: Fixed incorrect "Compile main" message. Should be "Compile menu" (2022-10-15).]]
+1.1.0: Fixed incorrect "Compile main" message. Should be "Compile menu" (2022-10-15).
+1.3.0: Added compile for second menu library, with memory cleanup in between libraries (2022-12-13).]]
 
 filePath = "0:/lua/user/DC4S/LibMenu-DC4S.lua"
+filePath2 = "0:/lua/user/DC4S/LibMenu2-DC4S.lua"
 
 function checkIfFileExists(filename) -- reference: https://stackoverflow.com/questions/4990990/check-if-a-file-exists-with-lua
   local file = io.open(filename, "r")
@@ -40,5 +42,8 @@ end
 
 screen.popHint("Compile menu",1000,color.cyan)
 convertLua(filePath)
+collectgarbage("collect") -- clean up memory
+screen.popHint("Compile menu 2",1000,color.cyan)
+convertLua(filePath2)
 
 os.exit(0)

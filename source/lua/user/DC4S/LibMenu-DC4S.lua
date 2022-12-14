@@ -12,7 +12,18 @@ Version history:
 1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
 1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
        Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
-       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).]]
+       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).
+1.3.0: Fixed issue where 3.65Vpc was considered standard Li-ion in terms of precharge voltage instead of LiFePO4 (2022-11-17).
+       Added test to verify configuration immediately upon startup (2022-12-12).
+       Added memory cleanup routine after reading PDOs from adapter (2022-12-12).
+       Changed internal version format (2022-12-12).
+       Added statusbar override support for charge termination/faults (2022-12-13).
+       Added support for TMP3x/LM35/LM50 external temperature sensor on D+ pin (2022-12-13).
+       Added optional over/undertemperature protection when using external sensor (2022-12-13).
+       Added charge timeout protection (2022-12-13).
+       Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
+       Added second menu library file due to RAM space exhaustion (2022-12-13).
+       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).]]
 
 function checkConfigs()
   local returnStatus = false
@@ -47,10 +58,13 @@ function checkConfigs()
   elseif (ccFallbackRate >= 2) then
     screen.showDialog("Config Error",string.format("Invalid CC fallbackrate!\n\n%.2fC >= 2.00C",ccFallbackRate),3000,true,color.red) 
   elseif (ccFallbackRate < 1) then
-    screen.showDialog("Config Error",string.format("Invalid CC fallbackrate!\n\n%.2fC < 1.00C",ccFallbackRate),3000,true,color.red)     
+    screen.showDialog("Config Error",string.format("Invalid CC fallbackrate!\n\n%.2fC < 1.00C",ccFallbackRate),3000,true,color.red)
+  elseif (undertemperatureThresholdC > overtemperatureThresholdC) then
+    screen.showDialog("Config Error",string.format("Invalid undertemp\nthreshold!\n(UTP > OTP)\n\n%d\1 > %d\1",undertemperatureThresholdC,overtemperatureThresholdC),5000,true,color.red)
   else
     returnStatus = true
   end
+  collectgarbage("collect") -- clean up memory
   return returnStatus
 end
 
@@ -62,14 +76,15 @@ function cfgCells()
   end
   if (voltsPerCell <= 3) then
     voltsPerCellPrecharge = 1.5 -- LTO/Lithium Titanate
-  elseif (voltsPerCell <= 3.6) then
+  elseif (voltsPerCell <= 3.65) then
     voltsPerCellPrecharge = 2.5 -- LiFePO4/Lithium Iron Phosphate
-  elseif ((voltsPerCell > 3.6) and (numCells > 1)) then
+  elseif ((voltsPerCell > 3.65) and (numCells > 1)) then
     voltsPerCellPrecharge = 3 -- LiCoO2, NiCoMn, NiCoAl, LiNiO2, LiMn2O4 (typical "Li-ion")
   else
     voltsPerCellPrecharge = 3.3 -- LiCoO2 and others as above, but adjusted for PPS min 3.3V
   end
   screen.popHint(string.format("%dS",numCells),1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgVpc()
@@ -82,14 +97,15 @@ function cfgVpc()
   end
   if (voltsPerCell <= 3) then
     voltsPerCellPrecharge = 1.5 -- LTO/Lithium Titanate
-  elseif (voltsPerCell <= 3.6) then
+  elseif (voltsPerCell <= 3.65) then
     voltsPerCellPrecharge = 2.5 -- LiFePO4/Lithium Iron Phosphate
-  elseif ((voltsPerCell > 3.6) and (numCells > 1)) then
+  elseif ((voltsPerCell > 3.65) and (numCells > 1)) then
     voltsPerCellPrecharge = 3 -- LiCoO2, NiCoMn, NiCoAl, LiNiO2, LiMn2O4 (typical "Li-ion")
   else
     voltsPerCellPrecharge = 3.3 -- LiCoO2 and others as above, but adjusted for PPS min 3.3V
   end
   screen.popHint(string.format("%0.2fV/cell",voltsPerCell),1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgPChgVpc()
@@ -100,6 +116,7 @@ function cfgPChgVpc()
     voltsPerCellPrecharge = voltageTable[vpcSel]
   end
   screen.popHint(string.format("%0.2fV/cell",voltsPerCellPrecharge),1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 -- TODO: reduce the redundant code in these menus...
@@ -125,6 +142,7 @@ function cfgCurr()
     ccDeadband = ccDeadbandNormal
   end
   screen.popHint(string.format("%0.3fA", chargeCurrent), 1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgCRate()
@@ -141,6 +159,7 @@ function cfgCRate()
   end
   termCRate = tmpCRate
   screen.popHint(string.format("%0.2fC", termCRate), 1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgPChgCRate()
@@ -157,6 +176,7 @@ function cfgPChgCRate()
   end
   prechargeCRate = tmpPCRate
   screen.popHint(string.format("%0.2fC", prechargeCRate), 1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function chargerSetup()
@@ -184,6 +204,7 @@ function chargerSetup()
       break
     end
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgPreChg()
@@ -205,6 +226,7 @@ function cfgPreChg()
       break
     end
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgRefreshRate()
@@ -226,6 +248,7 @@ function cfgRefreshRate()
     end
   end
   screen.popHint(string.format("%d ms", refreshInterval), 1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgDeadbandEntry(varSel)
@@ -294,6 +317,7 @@ function cfgDeadbandEntry(varSel)
   else
     ccDeadband = ccDeadbandNormal
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgDeadband()
@@ -313,6 +337,7 @@ function cfgDeadband()
       break
     end
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgAggressiveGc()
@@ -369,6 +394,7 @@ function cfgAggressiveGc()
   else
     screen.popHint("Disabled", 1000)
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgCableRes()
@@ -404,6 +430,7 @@ function cfgCableRes()
   if (cableResistance == 0.69) or (cableResistance == 0.069) then
     screen.popHint("Nice", 1000) -- Should I keep this? Eh, why not, it's a fun little Easter egg I guess.
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgSounds()
@@ -438,6 +465,7 @@ function cfgSounds()
   else
     screen.popHint("Sounds Off", 1000)
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgCcFallbackRate()
@@ -467,6 +495,7 @@ function cfgCcFallbackRate()
   end
   ccFallbackRate = tmpCcRate
   screen.popHint(string.format("%0.2fC", ccFallbackRate), 1000)
+  collectgarbage("collect") -- clean up memory
 end
 
 function cfgTempDisplay()
@@ -501,6 +530,7 @@ function cfgTempDisplay()
   else
     screen.popHint("Show C", 1000)
   end
+  collectgarbage("collect") -- clean up memory
 end
 
 function advancedMenu()
@@ -508,6 +538,7 @@ function advancedMenu()
   local gcMenuEntry = " "
   local soundMenuEntry = " "
   local tempDisplayMenuEntry = " "
+  local timeLimitMenuEntry = " "
   while true do
     if isAggressiveGcEnabled then
       gcMenuEntry = string.format("Aggressive GC: %.0fK", aggressiveGcThreshold/1024)
@@ -524,8 +555,13 @@ function advancedMenu()
     else
       tempDisplayMenuEntry = "Temperature Display: \1" -- degC
     end
+    if timeLimitHours == 0 then
+      timeLimitMenuEntry = "Time Limit: Disabled"
+    else
+      timeLimitMenuEntry = string.format("Time Limit: %dh", timeLimitHours)
+    end
     screen.clear()
-    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("CC Fallback: %.2fC", ccFallbackRate),"Chg Reg Deadband...",  tempDisplayMenuEntry, string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, "Restore All Defaults"})
+    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("CC Fallback: %.2fC", ccFallbackRate),"Chg Reg Deadband...", tempDisplayMenuEntry, "Ext Temp Sensor...", timeLimitMenuEntry, string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, "Restore All Defaults"})
     screen.clear()
     if advMenuSel == 1 then
       cfgPreChg()
@@ -538,12 +574,16 @@ function advancedMenu()
     elseif advMenuSel == 5 then
       cfgTempDisplay()
     elseif advMenuSel == 6 then
-      cfgRefreshRate()
+      cfgExtTemp()
     elseif advMenuSel == 7 then
-      cfgAggressiveGc()
+      cfgTimeLimit()
     elseif advMenuSel == 8 then
-      cfgSounds()
+      cfgRefreshRate()
     elseif advMenuSel == 9 then
+      cfgAggressiveGc()
+    elseif advMenuSel == 10 then
+      cfgSounds()
+    elseif advMenuSel == 11 then
       if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
         resetAllDefaults()
         screen.popHint("Defaults Restored", 1000)
@@ -552,4 +592,5 @@ function advancedMenu()
       break
     end
   end
+  collectgarbage("collect") -- clean up memory
 end
