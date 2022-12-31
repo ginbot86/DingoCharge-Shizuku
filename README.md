@@ -1,3 +1,5 @@
+
+
 # DingoCharge for Shizuku
 
 DingoCharge for Shizuku (simply referred to DingoCharge hereafter) is a Lua program that runs on the [YK-Lab Shizuku USB-C tester/multimeter](https://yk-lab.org:666/shizuku/manual/software/manual-pc-en-us/content.html), allowing it to become a highly customizable battery charger when connected to a compatible USB-C Power Delivery (PD) adapter that supports PPS (Programmable Power Supply) functionality. This tester is available under various names, like the YK-Lab YK001, AVHzY CT-3, Power-Z KT002, or the ATORCH UT18.
@@ -50,27 +52,27 @@ To install DingoCharge onto your tester:
 			    - `DingoCharge-Shizuku.lc`
 			    - `DC4S`
 				    - `UserDefaults-DC4S.lua`
-              - `lib`
-                - `DC4S-advancedMenu.lc`
-                - `DC4S-cfgAggressiveGc.lc`
-                - `DC4S-cfgCableRes.lc`
-                - `DC4S-cfgCcFallbackRate.lc`
-                - `DC4S-cfgCells.lc`
-                - `DC4S-cfgCRate.lc`
-                - `DC4S-cfgCurr.lc`
-                - `DC4S-cfgDeadband.lc`
-                - `DC4S-cfgDeadbandEntry.lc`
-                - `DC4S-cfgExtTemp.lc`
-                - `DC4S-cfgPChgCRate.lc`
-                - `DC4S-cfgPChgVpc.lc`
-                - `DC4S-cfgPreChg.lc`
-                - `DC4S-cfgRefreshRate.lc`
-                - `DC4S-cfgSounds.lc`
-                - `DC4S-cfgTempDisplay.lc`
-                - `DC4S-cfgTimeLimit.lc`
-                - `DC4S-cfgVpc.lc`
-                - `DC4S-chargerSetup.lc`
-                - `DC4S-checkConfigs`
+				     - `lib`
+		                - `DC4S-advancedMenu.lc`
+		                - `DC4S-cfgAggressiveGc.lc`
+		                - `DC4S-cfgCableRes.lc`
+		                - `DC4S-cfgCcFallbackRate.lc`
+		                - `DC4S-cfgCells.lc`
+		                - `DC4S-cfgCRate.lc`
+		                - `DC4S-cfgCurr.lc`
+		                - `DC4S-cfgDeadband.lc`
+		                - `DC4S-cfgDeadbandEntry.lc`
+		                - `DC4S-cfgExtTemp.lc`
+		                - `DC4S-cfgPChgCRate.lc`
+		                - `DC4S-cfgPChgVpc.lc`
+		                - `DC4S-cfgPreChg.lc`
+		                - `DC4S-cfgRefreshRate.lc`
+		                - `DC4S-cfgSounds.lc`
+		                - `DC4S-cfgTempDisplay.lc`
+		                - `DC4S-cfgTimeLimit.lc`
+		                - `DC4S-cfgVpc.lc`
+		                - `DC4S-chargerSetup.lc`
+		                - `DC4S-checkConfigs`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
