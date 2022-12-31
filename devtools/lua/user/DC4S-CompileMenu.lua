@@ -1,13 +1,35 @@
---[[DingoCharge for Shizuku Platform - Lua to LC Converter (Menu Library)
+--[[DingoCharge for Shizuku Platform - Lua to LC Converter (Menus/Libraries)
 https://ripitapart.com November 16, 2021.
 
 Version history:
 1.0.0: Initial public release (2022-06-30).
 1.1.0: Fixed incorrect "Compile main" message. Should be "Compile menu" (2022-10-15).
-1.3.0: Added compile for second menu library, with memory cleanup in between libraries (2022-12-13).]]
+1.3.0: Added compile for second menu library, with memory cleanup in between libraries (2022-12-13).
+1.4.0: Removed monolithic Menu Library 1/2; now compiles from a list of files for each menu/library (2022-12-15).]]
 
-filePath = "0:/lua/user/DC4S/LibMenu-DC4S.lua"
-filePath2 = "0:/lua/user/DC4S/LibMenu2-DC4S.lua"
+filePath = "0:/lua/user/DC4S/lib/DC4S-"
+fileNames = { "advancedMenu",
+              "cfgAggressiveGc",
+              "cfgCableRes",
+              "cfgCcFallbackRate",
+              "cfgCells",
+              "cfgCRate",
+              "cfgCurr",
+              "cfgDeadband",
+              "cfgDeadbandEntry",
+              "cfgExtTemp",
+              "cfgPChgCRate",
+              "cfgPChgVpc",
+              "cfgPreChg",
+              "cfgRefreshRate",
+              "cfgSounds",
+              "cfgTempDisplay",
+              "cfgTimeLimit",
+              "cfgVpc",
+              "chargerSetup",
+              "checkConfigs" }
+fileExtension = ".lua"
+
 
 function checkIfFileExists(filename) -- reference: https://stackoverflow.com/questions/4990990/check-if-a-file-exists-with-lua
   local file = io.open(filename, "r")
@@ -40,10 +62,14 @@ if (screen.open() ~= screen.OK) then
   os.exit(-1)
 end
 
-screen.popHint("Compile menu",1000,color.cyan)
-convertLua(filePath)
-collectgarbage("collect") -- clean up memory
-screen.popHint("Compile menu 2",1000,color.cyan)
-convertLua(filePath2)
+-- Start of script
+
+for loopIndex, currentFile in ipairs(fileNames) do
+  compileFile = filePath .. currentFile .. fileExtension
+  screen.popHint(currentFile, 1000, color.cyan)
+  collectgarbage("collect")
+  convertLua(compileFile)
+  collectgarbage("collect")
+end
 
 os.exit(0)

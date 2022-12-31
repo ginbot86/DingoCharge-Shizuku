@@ -23,7 +23,15 @@ Version history:
        Added charge timeout protection (2022-12-13).
        Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
        Added second menu library file due to RAM space exhaustion (2022-12-13).
-       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).]]
+       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).
+1.4.0: Split off monolithic menu library functions into individual files, reducing RAM consumption significantly (2022-12-15).
+       Increased aggressive GC threshold from 4K to 16K due to RAM usage savings from modularization (2022-12-15).
+       Changed charge error messages to reflect if recovery is enabled (i.e. "paused" vs. "stopped") (2022-12-18).
+       Fixed issue where precharge was not subject to the safety time limit (2022-12-18).
+       Added cumulative charge/energy display for the current charge session (2022-12-24).
+       Updated free memory counter to specify count in bytes (2022-12-24).
+       Changed how the UI calculates when to show different statusbar messages (2012-12-24).]]
+
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
@@ -93,7 +101,7 @@ function setDeadbandDefaults()
   cvDeadband = 0.01 -- Volts, constant-voltage mode
   tcDeadband = 0.01 -- Amps, end-of-charge mode
   
-  -- CAUTION: Do not change the rest of the code in this section.
+  -- CAUTION: Do not change the rest of the code in this function.
   if (chargeCurrent <= ccDeadbandThreshold) then
     ccDeadband = ccDeadbandLow
   else
@@ -110,7 +118,7 @@ function setAggressiveGcDefaults()
   --   so will severely impact stability (the system will likely hang, or crash
   --   with an out-of-memory dialog within minutes or hours when running the
   --   main charging/UI loop).
-  aggressiveGcThreshold = 4096 -- bytes
+  aggressiveGcThreshold = 16384 -- bytes
   isAggressiveGcEnabled = true -- should be true for proper program operation
 end
 
@@ -155,6 +163,12 @@ function setExternalTemperatureDefaults()
   --   threshold, and optionally resume charging once the temperature problem
   --   subsides. Hysteresis prevents the algorithm from oscillating in and out
   --   of a temperature fault state too quickly.
+  -- Note: Only the TMP36/LM50 are capable of measuring below temperatures
+  --   below freezing (0 degrees C/32 degrees F), since they have a +0.5 volt
+  --   offset that puts cold temperatures in range of the Shizuku's D+ pin ADC
+  --   (0 to 3.3V). The TMP35/LM35/TMP37 will be unable to provide negative
+  --   temperature readings, and therefore will not be able to trigger the
+  --   undertemperature protection features.
   isExternalTemperatureEnabled = false -- false disables all temperature protections
   externalTemperatureOffsetVoltage = -0.5 -- 0V for TMP35/TMP37, -0.5V for TMP36
   externalTemperatureGain = 100 -- 100x for 10mV/degC (TMP35, TMP36), 50x for 20mV/degC (TMP37)

@@ -8,7 +8,7 @@ Lithium-ion batteries can be dangerous if mishandled or abused! The author accep
 Follow the prompts in the program when they appear, and try to do them promptly (but don't rush yourself). Some steps require user intervention to connect/disconnect the battery and/or adapter, as the tester has no innate switching capabilities; in other words, you are manually performing the work of a relay/switch. :)
 
 ## How does DingoCharge work?
-DingoCharge leverages the [USB PD PPS](https://www.belkin.com/us/support-article?articleNum=318878) protocol to control the amount of current that flows into a rechargeable battery (as of version 1.3.0, only lithium-ion chemistries are supported). By adjusting the difference between the battery's present voltage and the voltage being supplied from the adapter, the amount of current flowing into the battery can be controlled via closed-loop regulation; this provides software controlled constant-current and constant-voltage operation. The program also provides an easy-to-use interface to set up the required charging parameters (voltage, current, charge termination/cutoff, etc.), and also ensures that the requested settings are compatible with the adapter in use, as not all PD PPS adapters are equal.
+DingoCharge leverages the [USB PD PPS](https://www.belkin.com/us/support-article?articleNum=318878) protocol to control the amount of current that flows into a rechargeable battery (as of version 1.4.0, only lithium-ion chemistries are supported). By adjusting the difference between the battery's present voltage and the voltage being supplied from the adapter, the amount of current flowing into the battery can be controlled via closed-loop regulation; this provides software controlled constant-current and constant-voltage operation. The program also provides an easy-to-use interface to set up the required charging parameters (voltage, current, charge termination/cutoff, etc.), and also ensures that the requested settings are compatible with the adapter in use, as not all PD PPS adapters are equal.
 
 The program is built around the [Lua API](https://yk-lab.org:666/index.php/2020/01/09/lua-programming-overview/) feature that is present on the Shizuku platform. The API provides the necessary functions to interact with a USB PD PPS adapter, as well as providing basic routines for the user interface.
 
@@ -19,7 +19,9 @@ DingoCharge is meant for people with existing electronics/battery knowledge (hob
 DingoCharge takes advantage of existing features in hardware that you already purchased (the USB tester, USB-C to USB-C cable(s), and your USB-C PD adapter(s)). With a little bit of extra hardware (USB-C or USB-A plug to the various connections you may need to hook up the battery), you have a highly flexible battery charger for your projects.
 
 ## Extra hardware required
-The only extra hardware required is a USB power cable that connects the VBUS and ground pins to your battery, and a microUSB cable to an external 5 volt USB power source (as of version 1.3.0), and the battery you want to charge (as of version 1.3.0, lithium-ion/lithium iron phosphate batteries with a 1S to 5S (2S to 4S recommended) configuration are supported, with experimental support for 2S-8S lithium-titanate chemistries added but untested). Examples include USB-A to 5.5x2.1mm barrel jacks, XT30/XT60, Deans, SAE, Anderson Powerpole connectors, or alligator clips. If your PD adapter supports PPS with more than 3 amps of current, you will need a suitably rated 5 amp/100 watt USB-C to USB-C cable to connect the tester to the adapter.
+The only extra hardware required is a USB power cable that connects the VBUS and ground pins to your battery, and a microUSB cable to an external 5 volt USB power source (as of version 1.4.0), and the battery you want to charge (as of version 1.4.0, lithium-ion/lithium iron phosphate batteries with a 1S to 5S (2S to 4S recommended) configuration are supported, with experimental support for 2S-8S lithium-titanate chemistries added but untested). Examples include USB-A to 5.5x2.1mm barrel jacks, XT30/XT60, Deans, SAE, Anderson Powerpole connectors, or alligator clips. If your PD adapter supports PPS with more than 3 amps of current, you will need a suitably rated 5 amp/100 watt USB-C to USB-C cable to connect the tester to the adapter.
+
+Since version 1.3.0, DingoCharge supports use of linear analog temperature sensors whose outputs range from 0 to 3.3 volts on the D+ pin (for example, the TMP35/LM35, TMP36/LM50, TMP37). Thermal protections are disabled unless the Ext Temp Sensor option is turned on in the Advanced menu or in the user defaults file.
 
 DingoCharge will only work with the USB PD adapter connected to the tester's input, and the battery on the tester's output. It will not work if the connections are reversed.
 
@@ -47,8 +49,28 @@ To install DingoCharge onto your tester:
 		    - `user`
 			    - `DingoCharge-Shizuku.lc`
 			    - `DC4S`
-				    - `LibMenu-DC4S.lc`
 				    - `UserDefaults-DC4S.lua`
+              - `lib`
+                - `DC4S-advancedMenu.lc`
+                - `DC4S-cfgAggressiveGc.lc`
+                - `DC4S-cfgCableRes.lc`
+                - `DC4S-cfgCcFallbackRate.lc`
+                - `DC4S-cfgCells.lc`
+                - `DC4S-cfgCRate.lc`
+                - `DC4S-cfgCurr.lc`
+                - `DC4S-cfgDeadband.lc`
+                - `DC4S-cfgDeadbandEntry.lc`
+                - `DC4S-cfgExtTemp.lc`
+                - `DC4S-cfgPChgCRate.lc`
+                - `DC4S-cfgPChgVpc.lc`
+                - `DC4S-cfgPreChg.lc`
+                - `DC4S-cfgRefreshRate.lc`
+                - `DC4S-cfgSounds.lc`
+                - `DC4S-cfgTempDisplay.lc`
+                - `DC4S-cfgTimeLimit.lc`
+                - `DC4S-cfgVpc.lc`
+                - `DC4S-chargerSetup.lc`
+                - `DC4S-checkConfigs`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
