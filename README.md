@@ -1,5 +1,3 @@
-
-
 # DingoCharge for Shizuku
 
 DingoCharge for Shizuku (simply referred to DingoCharge hereafter) is a Lua program that runs on the [YK-Lab Shizuku USB-C tester/multimeter](https://yk-lab.org:666/shizuku/manual/software/manual-pc-en-us/content.html), allowing it to become a highly customizable battery charger when connected to a compatible USB-C Power Delivery (PD) adapter that supports PPS (Programmable Power Supply) functionality. This tester is available under various names, like the YK-Lab YK001, AVHzY CT-3, Power-Z KT002, or the ATORCH UT18.
