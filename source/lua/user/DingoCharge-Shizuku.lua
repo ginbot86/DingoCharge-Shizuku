@@ -24,18 +24,23 @@ Version history:
        Added charge timeout protection (2022-12-13).
        Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
        Added second menu library file due to RAM space exhaustion (2022-12-13).
-       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).]]
+       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).
+1.4.0: Split off monolithic menu library functions into individual files, reducing RAM consumption significantly (2022-12-15).
+       Increased aggressive GC threshold from 4K to 16K due to RAM usage savings from modularization (2022-12-15).
+       Changed charge error messages to reflect if recovery is enabled (i.e. "paused" vs. "stopped") (2022-12-18).
+       Fixed issue where precharge was not subject to the safety time limit (2022-12-18).
+       Added cumulative charge/energy display for the current charge session (2022-12-24).
+       Updated free memory counter to specify count in bytes (2022-12-24).
+       Changed how the UI calculates when to show different statusbar messages (2012-12-24).]]
 
 scriptVerMajor = 1
-scriptVerMinor = 3
+scriptVerMinor = 4
 scriptPatchVer = 0
 
 -- Default settings are stored in a separate file:
 require "lua/user/DC4S/UserDefaults-DC4S"
 
--- Configuration menus are stored in separate files:
-require "lua/user/DC4S/LibMenu-DC4S"
-require "lua/user/DC4S/LibMenu2-DC4S"
+-- Configuration tools are now stored in their own files in the "DC4S/lib" subfolder as of version 1.4.0
 
 -- Functions
 
@@ -256,6 +261,9 @@ function startSessionTimer()
   sessionTimerStart = os.clock()
   sessionTimerNow = sessionTimerStart
   isSessionTimerEnabled = true
+  
+  cumCharge = 0
+  cumEnergy = 0
 end
 
 function stopSessionTimer()
@@ -349,9 +357,9 @@ function startCharging()
       lastChargeStage = 0
       
       while true do -- main program/UI loop
-
+        loopIterationTimerStart = sys.gTick()
         -- charge regulation
-        if regLoopMode == 0 then
+        if regLoopMode == 0 then -- constant-current mode
           -- test for transfer to CC or CV mode
           if (meter.readVoltage() > ((regLoopVoltage - cvDeadband) + (readCurrentSigned() * cableResistance))) then 
             if (chargeStage == 1) then -- move to CC stage
@@ -370,7 +378,7 @@ function startCharging()
             end
           end
           setpointDeviation = readCurrentSigned() - regLoopCurrent
-        elseif regLoopMode == 1 then
+        elseif regLoopMode == 1 then -- constant-voltage mode
         -- test for transfer to idle mode upon termination
           if (meter.readCurrent() < regLoopCurrent) then
             chargeStage = 4
@@ -383,21 +391,21 @@ function startCharging()
             end
             isStatusbarOverridden = true
             statusbarOverrideColor = color.green
-            statusbarOverrideText = "Charge complete"
+            statusbarOverrideText = "Stopped: Term rate reached"
           end
           setpointDeviation = meter.readVoltage() - regLoopVoltage - (readCurrentSigned() * cableResistance)
         else  -- this should never happen
-        chargeStage = 0
-        regLoopMode = 0
-        regLoopCurrent = 0
-        setpointDeadband = tcDeadband
-        isStatusbarOverridden = true
-        statusbarOverrideColor = color.red        
-        statusbarOverrideText = "Error: Invalid loop mode"
-        if isSystemSoundsEnabled then
-          buzzer.system(sysSound.alarm)
-        end
-        stopSessionTimer()
+          chargeStage = 0
+          regLoopMode = 0
+          regLoopCurrent = 0
+          setpointDeadband = tcDeadband
+          isStatusbarOverridden = true
+          statusbarOverrideColor = color.red        
+          statusbarOverrideText = "Stopped: Invalid state"
+          if isSystemSoundsEnabled then
+            buzzer.system(sysSound.alarm)
+          end
+          stopSessionTimer()
         end
         
         if (math.abs(setpointDeviation) > setpointDeadband) then
@@ -427,15 +435,26 @@ function startCharging()
           regLoopCurrent = 0
           setpointDeadband = tcDeadband
           isStatusbarOverridden = true
-          statusbarOverrideColor = color.red
           if readExternalTemperatureCelsius() > overtemperatureThresholdC - temperatureProtectionHysteresisC then
             isOvertemperatureFault = true
-            statusbarOverrideText = "Error: Overtemperature"    
+            if isOvertemperatureRecoveryEnabled then
+              statusbarOverrideColor = color.orange
+              statusbarOverrideText = "Paused: Overtemperature"
+            else
+              statusbarOverrideColor = color.red
+              statusbarOverrideText = "Stopped: Overtemperature"
+            end
           elseif readExternalTemperatureCelsius() < undertemperatureThresholdC + temperatureProtectionHysteresisC then
             isUndertemperatureFault = true
-            statusbarOverrideText = "Error: Undertemperature"
+            if isUndertemperatureRecoveryEnabled then
+              statusbarOverrideColor = color.orange
+              statusbarOverrideText = "Paused: Undertemperature"
+            else
+              statusbarOverrideColor = color.red
+              statusbarOverrideText = "Stopped: Undertemperature"
+            end
           else
-            statusbarOverrideText = "Error: Temperature fault" -- if somehow the temperature fixes itself as we try to determine what the fault was
+            statusbarOverrideText = "Stopped: Temperature fault" -- if somehow the temperature fixes itself as we try to determine what the fault was
             isOvertemperatureFault = true
             isUndertemperatureFault = true -- set both because the exact temperature fault was "forgotten"
           end
@@ -445,14 +464,14 @@ function startCharging()
           stopSessionTimer()
         end
         
-        if chargeStage > 1 and chargeStage < 4 and termCRate > 0 and timeLimitHours > 0 and ((sessionTimerNow - sessionTimerStart) / 3600) > timeLimitHours then -- safety check: stop charging if it's taking too long to finish
+        if chargeStage > 0 and chargeStage < 4 and termCRate > 0 and timeLimitHours > 0 and ((sessionTimerNow - sessionTimerStart) / 3600) > timeLimitHours then -- safety check: stop charging if it's taking too long to finish
           chargeStage = 0
           regLoopMode = 0
           regLoopCurrent = 0
           setpointDeadband = tcDeadband
           isStatusbarOverridden = true
           statusbarOverrideColor = color.red
-          statusbarOverrideText = string.format("Error: Timed out (%dh)", timeLimitHours)
+          statusbarOverrideText = string.format("Stopped: Timed out (%dh)", timeLimitHours)
           if isSystemSoundsEnabled then
             buzzer.system(sysSound.alarm)
           end
@@ -539,7 +558,7 @@ function startCharging()
           screen.drawRect(94, 70, 159, 114, color.lightPurple)
           screen.showString(97, 67, "-MiscInfo", font.f0508, color.lightPurple)
           updateSessionTimer()
-          screen.showString(103, 76, string.format("%02.0f:%02.0f:%02.0f", math.floor((sessionTimerNow - sessionTimerStart) / 3600), math.floor(((sessionTimerNow - sessionTimerStart) % 3600)/60), math.floor(sessionTimerNow - sessionTimerStart) % 60), font.f1212, color.lightPurple) -- format total seconds to hh:mm:ss
+          screen.showString(103, 76, string.format("%02.0f:%02.0f:%02.0f", math.floor((sessionTimerNow - sessionTimerStart) / 3600), math.floor(((sessionTimerNow - sessionTimerStart) % 3600) / 60), math.floor(sessionTimerNow - sessionTimerStart) % 60), font.f1212, color.lightPurple) -- format total seconds to hh:mm:ss
           screen.showString(103, 88, string.format("%0.2fVpd", targetVoltage), font.f1212, color.lightPurple)
           if isTempDisplayF then
             if isExternalTemperatureEnabled then
@@ -549,17 +568,19 @@ function startCharging()
             end
           else
             if isExternalTemperatureEnabled then
-              screen.showString(97, 101, string.format("%+0.2f\1ex", readExternalTemperatureCelsius()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
+              screen.showString(97, 101, string.format("%+0.2f\1ex", readExternalTemperatureCelsius()), font.f1212, color.lightPurple)
             else  
               screen.showString(97, 101, string.format("%+0.2f\1in", sys.gBoardTempK()), font.f1212, color.lightPurple) -- it's actually in Celsius, not Kelvin (or "kevin" according to the API docs)
             end
           end
           -- dynamic statusbar that changes periodically
           if not isStatusbarOverridden then
-            if ((os.clock() - sessionTimerStart) % 10) < 3.333 then
-              printStatusbar(string.format("Free mem: %d/%d", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
-            elseif ((os.clock() - sessionTimerStart) % 10) < 6.667 then
+            if ((os.clock() - sessionTimerStart) % 10) < 2.5 then
+              printStatusbar(string.format("Free mem: %d/%dB", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
+            elseif ((os.clock() - sessionTimerStart) % 10) < 5 then
               printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
+            elseif ((os.clock() - sessionTimerStart) % 10) < 7.5 then
+              printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), color.grey, color.grey)
             else
               if regLoopMode == 1 then
                 printStatusbar(string.format("Setpoint: %.3f/%.3fV", setpointDeviation, setpointDeadband), color.grey, color.grey)
@@ -568,7 +589,11 @@ function startCharging()
               end
             end
           else
-            printStatusbar(statusbarOverrideText, statusbarOverrideColor, statusbarOverrideColor)
+            if (os.clock() % 10) < 5 then -- alternate between override text and cumulative charge
+              printStatusbar(statusbarOverrideText, statusbarOverrideColor, statusbarOverrideColor)
+            else  
+              printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), statusbarOverrideColor, statusbarOverrideColor)
+            end
           end
           
           -- flush updated framebuffer contents to screen, and reset the fine timer so we can wait until it's time to update the screen again
@@ -579,6 +604,11 @@ function startCharging()
         
         if isAggressiveGcEnabled and sys.gFreeHeap() < aggressiveGcThreshold then -- can't rely on automatic GC to save us if we run low on RAM
           collectgarbage("collect") -- YEET THE GARBAGE
+        end
+        
+        if isSessionTimerEnabled then
+          cumCharge = cumCharge + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readCurrentSigned()) / 3600) -- Shizuku Lua API does not expose built-in accumulation group functionality; need to implement it ourselves
+          cumEnergy = cumEnergy + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readPowerSigned()) / 3600)
         end
       end
     
@@ -601,6 +631,7 @@ if (screen.open() ~= screen.OK) then
 end
 resetAllDefaults()
 
+require "lua/user/DC4S/lib/DC4S-checkConfigs"
 if not checkConfigs() then -- check if configuration is valid
   os.exit(-1)
 end
@@ -628,12 +659,14 @@ while true do
   screen.clear()
 
   if mainMenuSel == 0 then
+    require "lua/user/DC4S/lib/DC4S-chargerSetup" -- load on demand
     chargerSetup()
   elseif mainMenuSel == 1 then
     if screen.popYesOrNo(string.format("Start charging?\nVoltage: %.3fV\nCurrent: %.3fA\nTerm: %.2fC/%.3fA", (voltsPerCell * numCells), chargeCurrent, termCRate, (chargeCurrent * termCRate)), color.lightGreen) then
       startCharging()
     end
   elseif mainMenuSel == 2 then
+    require "lua/user/DC4S/lib/DC4S-advancedMenu"
     advancedMenu()
   elseif mainMenuSel == 3 then
     if (screen.popMenu({"<       Main Menu       ", "DingoCharge for Shizuku", "Script by Jason Gin", "ripitapart.com","(C) 2021-2022", string.format("Version: v%d.%d.%d", scriptVerMajor, scriptVerMinor, scriptPatchVer), ":3"}) == 6) then
