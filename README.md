@@ -50,27 +50,27 @@ To install DingoCharge onto your tester:
 			    - `DingoCharge-Shizuku.lc`
 			    - `DC4S`
 				    - `UserDefaults-DC4S.lua`
-              - `lib`
-                - `DC4S-advancedMenu.lc`
-                - `DC4S-cfgAggressiveGc.lc`
-                - `DC4S-cfgCableRes.lc`
-                - `DC4S-cfgCcFallbackRate.lc`
-                - `DC4S-cfgCells.lc`
-                - `DC4S-cfgCRate.lc`
-                - `DC4S-cfgCurr.lc`
-                - `DC4S-cfgDeadband.lc`
-                - `DC4S-cfgDeadbandEntry.lc`
-                - `DC4S-cfgExtTemp.lc`
-                - `DC4S-cfgPChgCRate.lc`
-                - `DC4S-cfgPChgVpc.lc`
-                - `DC4S-cfgPreChg.lc`
-                - `DC4S-cfgRefreshRate.lc`
-                - `DC4S-cfgSounds.lc`
-                - `DC4S-cfgTempDisplay.lc`
-                - `DC4S-cfgTimeLimit.lc`
-                - `DC4S-cfgVpc.lc`
-                - `DC4S-chargerSetup.lc`
-                - `DC4S-checkConfigs`
+				     - `lib`
+		                - `DC4S-advancedMenu.lc`
+		                - `DC4S-cfgAggressiveGc.lc`
+		                - `DC4S-cfgCableRes.lc`
+		                - `DC4S-cfgCcFallbackRate.lc`
+		                - `DC4S-cfgCells.lc`
+		                - `DC4S-cfgCRate.lc`
+		                - `DC4S-cfgCurr.lc`
+		                - `DC4S-cfgDeadband.lc`
+		                - `DC4S-cfgDeadbandEntry.lc`
+		                - `DC4S-cfgExtTemp.lc`
+		                - `DC4S-cfgPChgCRate.lc`
+		                - `DC4S-cfgPChgVpc.lc`
+		                - `DC4S-cfgPreChg.lc`
+		                - `DC4S-cfgRefreshRate.lc`
+		                - `DC4S-cfgSounds.lc`
+		                - `DC4S-cfgTempDisplay.lc`
+		                - `DC4S-cfgTimeLimit.lc`
+		                - `DC4S-cfgVpc.lc`
+		                - `DC4S-chargerSetup.lc`
+		                - `DC4S-checkConfigs`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
