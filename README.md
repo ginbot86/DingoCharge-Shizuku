@@ -70,7 +70,7 @@ To install DingoCharge onto your tester:
 		                - `DC4S-cfgTimeLimit.lc`
 		                - `DC4S-cfgVpc.lc`
 		                - `DC4S-chargerSetup.lc`
-		                - `DC4S-checkConfigs`
+		                - `DC4S-checkConfigs.lc`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
