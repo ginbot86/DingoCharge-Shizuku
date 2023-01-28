@@ -2,7 +2,9 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).
+       Added LM135/LM235/LM335 support as external temperature sensors (2023-01-21).]]
 
 function cfgExtTemp()
   local cfgExtTempMenuEntryExtEnable = " "
@@ -65,11 +67,13 @@ function cfgExtTemp()
       end
     elseif cfgExtTempSel == 2 then
       screen.clear()
-      cfgExtTempSelSubmenu = screen.popMenu{string.format("Keep Current (%+0.3fV)", externalTemperatureOffsetVoltage), "0V (TMP35, TMP37)", "-0.5V (TMP36)"}
+      cfgExtTempSelSubmenu = screen.popMenu{string.format("Keep Current (%+0.3fV)", externalTemperatureOffsetVoltage), "0V (TMP35, TMP37)", "-0.5V (TMP36)", "-2.7315 (LM1/2/335)"}
       if cfgExtTempSelSubmenu == 1 then
         externalTemperatureOffsetVoltage = 0
       elseif cfgExtTempSelSubmenu == 2 then
         externalTemperatureOffsetVoltage = -0.5
+      elseif cfgExtTempSelSubmenu == 3 then
+        externalTemperatureOffsetVoltage = -2.7315
       end
       screen.popHint(string.format("%+0.3fV", externalTemperatureOffsetVoltage), 1000)
     elseif cfgExtTempSel == 3 then
@@ -191,5 +195,7 @@ function cfgExtTemp()
   cfgExtTempSel = nil
   cfgExtTempSelSubmenu = nil
   cfgExtTempSelSubmenuText = nil
+  cfgExtTemp = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgExtTemp"] = nil
   collectgarbage("collect") -- clean up memory
 end

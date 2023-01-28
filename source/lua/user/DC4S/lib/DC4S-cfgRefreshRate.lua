@@ -2,7 +2,8 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 function cfgRefreshRate()
   local refreshRateSel = 0
@@ -26,5 +27,7 @@ function cfgRefreshRate()
   -- discard temporary variables
   refreshRateSel = nil
   refreshRateTable = nil
+  cfgRefreshRate = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgRefreshRate"] = nil
   collectgarbage("collect") -- clean up memory
 end
