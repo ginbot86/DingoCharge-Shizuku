@@ -2,7 +2,8 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 function cfgCcFallbackRate()
   screen.clear()
@@ -34,5 +35,7 @@ function cfgCcFallbackRate()
   -- discard temporary variables
   cfgCcFallbackSel = nil
   tmpCcRate = nil
+  cfgCcFallbackRate = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgCcFallbackRate"] = nil
   collectgarbage("collect") -- clean up memory
 end

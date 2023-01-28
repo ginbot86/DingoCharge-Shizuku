@@ -2,7 +2,9 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Changed the low-current deadband threshold to activate if charge current is less than the threshold instead of less than/equal to (2023-01-01).
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 function cfgDeadbandEntry(varSel)
   local varValue = 0
@@ -67,10 +69,11 @@ function cfgDeadbandEntry(varSel)
     varValue = nil
     varUnit = nil
     varType = nil
+    cfgDeadbandEntry = nil
     collectgarbage("collect") -- clean up memory
     return
   end
-  if (chargeCurrent <= ccDeadbandThreshold) then
+  if (chargeCurrent < ccDeadbandThreshold) then
     ccDeadband = ccDeadbandLow
   else
     ccDeadband = ccDeadbandNormal
@@ -79,5 +82,7 @@ function cfgDeadbandEntry(varSel)
   varValue = nil
   varUnit = nil
   varType = nil
+  cfgDeadbandEntry = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgDeadbandEntry"] = nil
   collectgarbage("collect") -- clean up memory
 end

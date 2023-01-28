@@ -2,7 +2,9 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Changed how aggressive GC is enabled/disabled; set aggressiveGcThreshold to 0 instead of isAggressiveGcEnabled to false (not that you should do this anyway...) (2023-01-08).
+       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 function advancedMenu()
   local advMenuSel = 0
@@ -12,10 +14,10 @@ function advancedMenu()
   local timeLimitMenuEntry = " "
   while true do
       collectgarbage("collect") -- clean up memory before we get into the menus
-    if isAggressiveGcEnabled then
-      gcMenuEntry = string.format("Aggressive GC: %.0fK", aggressiveGcThreshold/1024)
-    else
+    if aggressiveGcThreshold == 0 then
       gcMenuEntry = "Aggressive GC: Disabled"
+    else
+      gcMenuEntry = string.format("Aggressive GC: %.0fK", aggressiveGcThreshold / 1024)
     end
     if isSystemSoundsEnabled then
       soundMenuEntry = "System Sounds: On"
@@ -74,5 +76,7 @@ function advancedMenu()
       break
     end
   end
+  advancedMenu = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-advancedMenu"] = nil
   collectgarbage("collect") -- clean up memory
 end

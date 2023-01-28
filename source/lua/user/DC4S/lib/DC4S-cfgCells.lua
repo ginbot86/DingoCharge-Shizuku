@@ -2,7 +2,8 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 function cfgCells()
   screen.clear()
@@ -22,5 +23,7 @@ function cfgCells()
   screen.popHint(string.format("%dS", numCells), 1000)
   -- discard temporary variables
   numCellsSel = nil
+  cfgCells = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgCells"] = nil
   collectgarbage("collect") -- clean up memory
 end

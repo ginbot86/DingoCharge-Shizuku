@@ -2,7 +2,9 @@
 https://ripitapart.com December 15, 2022.
 
 Version history:
-1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).]]
+1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
+1.5.0: Changed the low-current deadband threshold to activate if charge current is less than the threshold instead of less than/equal to (2023-01-01).
+       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
 
 -- TODO: reduce the redundant code in these menus...
 function cfgCurr()
@@ -21,7 +23,7 @@ function cfgCurr()
     tmpCurr = tmpCurr + (0.001 * screen.popMenu({string.format("%0.3fA",tmpCurr),string.format("%0.3fA",tmpCurr + 0.001),string.format("%0.3fA",tmpCurr + 0.002),string.format("%0.3fA",tmpCurr + 0.003),string.format("%0.3fA",tmpCurr + 0.004),string.format("%0.3fA",tmpCurr + 0.005),string.format("%0.3fA",tmpCurr + 0.006),string.format("%0.3fA",tmpCurr + 0.007),string.format("%0.3fA",tmpCurr + 0.008),string.format("%0.3fA",tmpCurr + 0.009)}))   
   end
   chargeCurrent = tmpCurr
-  if (chargeCurrent <= ccDeadbandThreshold) then -- smaller deadband for lower charge currents
+  if (chargeCurrent < ccDeadbandThreshold) then -- smaller deadband for lower charge currents
     ccDeadband = ccDeadbandLow
   else
     ccDeadband = ccDeadbandNormal
@@ -30,5 +32,7 @@ function cfgCurr()
   -- discard temporary variables
   currSel = nil
   tmpCurr = nil
+  cfgCurr = nil
+  package.loaded["lua/user/DC4S/lib/DC4S-cfgCurr"] = nil
   collectgarbage("collect") -- clean up memory
 end

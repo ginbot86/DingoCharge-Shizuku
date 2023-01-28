@@ -30,7 +30,16 @@ Version history:
        Fixed issue where precharge was not subject to the safety time limit (2022-12-18).
        Added cumulative charge/energy display for the current charge session (2022-12-24).
        Updated free memory counter to specify count in bytes (2022-12-24).
-       Changed how the UI calculates when to show different statusbar messages (2012-12-24).]]
+       Changed how the UI calculates when to show different statusbar messages (2012-12-24).
+1.5.0: Changed the low-current deadband threshold to activate if charge current is less than the threshold instead of less than/equal to (2023-01-01).
+       Updated copyright string in About screen to read "(C) 2021-2023".
+       Changed the default cell count to 2S for improved user experience; most PPS adapters go to 11V so a compatibility fail out of the box kinda sucks... (2023-01-06).
+       Changed how aggressive GC is enabled/disabled; set aggressiveGcThreshold to 0 instead of isAggressiveGcEnabled to false (not that you should do this anyway...) (2023-01-08).
+       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).
+       Added LM135/LM235/LM335 support as external temperature sensors (2023-01-21).
+       Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
+       Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
+       Changed how USB-C CC attachment errors are handled; user can retry the detection instead of needing to restart the charge setup procedure (2023-01-28).]]
 
 
 -- I guess this is easier than trying to build a configuration file parser...
@@ -54,7 +63,7 @@ function setDefaults()
   --   PPS PDOs of 3.3~5.9V work for 1S, 3.3~11V for 1-2S, 3.3~16V for 1-3S,
   --   3.3~21V for 1-5S, at least for typical Li-ion chemistries. A PPS minimum
   --   voltage of 5V is incompatible with 1S batteries.
-  numCells = 3
+  numCells = 2
   voltsPerCell = 4.2
   chargeCurrent = 2
   termCRate = 0.05
@@ -97,12 +106,12 @@ function setDeadbandDefaults()
   pcDeadband = 0.01 -- Amps, precharge mode
   ccDeadbandNormal = 0.025 -- Amps, constant-current mode
   ccDeadbandLow = 0.01 -- Amps, constant-current mode for lower currents
-  ccDeadbandThreshold = 0.5 -- Amps, use low deadband if current <= threshold
+  ccDeadbandThreshold = 0.5 -- Amps, use low deadband if current < threshold
   cvDeadband = 0.01 -- Volts, constant-voltage mode
   tcDeadband = 0.01 -- Amps, end-of-charge mode
   
   -- CAUTION: Do not change the rest of the code in this function.
-  if (chargeCurrent <= ccDeadbandThreshold) then
+  if (chargeCurrent < ccDeadbandThreshold) then
     ccDeadband = ccDeadbandLow
   else
     ccDeadband = ccDeadbandNormal
@@ -118,8 +127,7 @@ function setAggressiveGcDefaults()
   --   so will severely impact stability (the system will likely hang, or crash
   --   with an out-of-memory dialog within minutes or hours when running the
   --   main charging/UI loop).
-  aggressiveGcThreshold = 16384 -- bytes
-  isAggressiveGcEnabled = true -- should be true for proper program operation
+  aggressiveGcThreshold = 16384 -- bytes, set to 0 to disable (NOT RECOMMENDED!)
 end
 
 function setSystemSoundDefaults()
@@ -170,7 +178,7 @@ function setExternalTemperatureDefaults()
   --   temperature readings, and therefore will not be able to trigger the
   --   undertemperature protection features.
   isExternalTemperatureEnabled = false -- false disables all temperature protections
-  externalTemperatureOffsetVoltage = -0.5 -- 0V for TMP35/TMP37, -0.5V for TMP36
+  externalTemperatureOffsetVoltage = -0.5 -- 0V for TMP35/TMP37, -0.5V for TMP36, -2.7315 for LM135/LM235/LM335
   externalTemperatureGain = 100 -- 100x for 10mV/degC (TMP35, TMP36), 50x for 20mV/degC (TMP37)
 
   temperatureProtectionHysteresisC = 10 -- temperature must cool down/warm up past the protection threshold before charge resumes
