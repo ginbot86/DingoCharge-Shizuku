@@ -1,8 +1,9 @@
 --[[DingoCharge for Shizuku Platform - Lua to LC Converter (Main Code)
-https://ripitapart.com November 16, 2021.
+https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 
 Version history:
-1.0.0: Initial public release (2022-06-30).]]
+1.0.0: Initial public release (2022-06-30).
+1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).]]
 
 filePath = "0:/lua/user/DingoCharge-Shizuku.lua"
 

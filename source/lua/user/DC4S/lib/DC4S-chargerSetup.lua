@@ -1,9 +1,11 @@
 --[[DingoCharge for Shizuku Platform - Charger Setup Configuration Menu
-https://ripitapart.com December 15, 2022.
+https://github.com/ginbot86/DingoCharge-Shizuku December 15, 2022.
 
 Version history:
 1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
-1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
+1.5.0: Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).
+1.6.0: Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
+       Changed header to point directly to official GitHub repository (2023-12-15).]]
 
 function chargerSetup()
   local chgMenuSel = 0
@@ -24,6 +26,7 @@ function chargerSetup()
       require "lua/user/DC4S/lib/DC4S-cfgCRate"
       cfgCRate()
     elseif chgMenuSel == 5 then
+      require "lua/user/DC4S/lib/DC4S-testCompatibility"
       testCompatibility(true)
     elseif chgMenuSel == 6 then
       if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
@@ -38,5 +41,5 @@ function chargerSetup()
   chgMenuSel = nil
   chargerSetup = nil
   package.loaded["lua/user/DC4S/lib/DC4S-chargerSetup"] = nil
-  collectgarbage("collect") -- clean up memory
+  collectgarbage("collect")
 end
