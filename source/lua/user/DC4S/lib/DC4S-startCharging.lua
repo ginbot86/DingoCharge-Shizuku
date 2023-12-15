@@ -1,12 +1,45 @@
 --[[DingoCharge for Shizuku Platform - Main Battery Charge Control
-https://ripitapart.com January 27, 2023.
+https://github.com/ginbot86/DingoCharge-Shizuku January 27, 2023.
 
 Version history:
-1.5.0: Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).]]
+1.5.0: Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
+1.6.0: Added check to verify that the battery voltage is at least 3 volts (no PPS adapter will likely support less than this) (2023-01-29).
+       Removed redundant aggressive GC threshold check while charging (2023-02-02).
+       Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
+       Added more system sounds for charge errors and prompts (2023-11-01).
+       Added check to verify that the battery voltage does not already exceed the configured charging voltage (2023-11-01).
+       Fixed issue where elapsed time (and Time Limit) advances 10x faster than intended on firmware v1.00.62 (2023-12-11).
+       Fixed issue where the Chg. Set display does not flip between precharge current and voltage once the session timer stops (2023-12-11).
+       Changed header to point directly to official GitHub repository (2023-12-15).]]
 
 function startCharging()
   meter.setDataSource(meter.INSTANT) -- using the API's meter filtering modes causes regulation instability
+  
   if screen.popYesOrNo("Unplug adapter thenplug in battery", color.cyan) then
+  
+    if (meter.readVoltage() > voltsPerCell * numCells) then -- verify battery voltage does not already exceed the configured charging voltage
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.alarm)
+      end
+      screen.showDialog("Config Error", string.format("Battery voltage toohigh!\n\n%.3fV > %.3fV", meter.readVoltage(), voltsPerCell * numCells), 3000, true, color.red)
+      startCharging = nil
+      package.loaded["lua/user/DC4S/lib/DC4S-startCharging"] = nil
+      collectgarbage("collect")
+      return false
+    end
+    
+    while (meter.readVoltage() < 3) do -- verify battery voltage is present, otherwise a "voltage too low for precharge" error will occur after compatibility testing
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.alarm)
+      end
+      if screen.popYesOrNo(string.format("Battery is not\nplugged in! (%.2fV)\n* Confirm: go back\n* Cancel: retry", meter.readVoltage()), color.red) then
+        startCharging = nil
+        package.loaded["lua/user/DC4S/lib/DC4S-startCharging"] = nil
+        collectgarbage("collect")
+        return false
+      end
+    end
+    
     initialVbat = meter.readVoltage()
     screen.popHint(string.format("Vbat = %.3fV", initialVbat), 1000)
   else
@@ -16,8 +49,12 @@ function startCharging()
     return false
   end
 
+  require "lua/user/DC4S/lib/DC4S-testCompatibility"
   if (testCompatibility(false) == true) then
     if (initialVbat < minVoltage) then -- cannot safely control precharge current if battery voltage is less than PPS minimum
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.alarm)
+      end
       screen.clear()
       screen.showDialog("Precharge Failed", string.format("Battery voltage toolow to precharge!\n\nVbat < PPS min out:%.3fV < %.3fV", initialVbat, minVoltage), 5000, true, color.red)
       closePdSession()
@@ -37,6 +74,9 @@ function startCharging()
       end
       
       if (pdSink.request(bestPdo, targetVoltage, maxCurrent) ~= pdSink.OK) then
+        if isSystemSoundsEnabled then
+          buzzer.system(sysSound.alarm)
+        end
         screen.clear()
         screen.showDialog("PD Request Failed", "Failed to receive\nready message from\nadapter!", 5000, true, color.red)
         closePdSession()  
@@ -46,6 +86,9 @@ function startCharging()
         return false
       end 
       
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.hint)
+      end
       if not (screen.popYesOrNo("Ready to charge.\nPlug in battery now", color.lightGreen)) then
         closePdSession()
         startCharging = nil
@@ -73,6 +116,9 @@ function startCharging()
       if not isChargeStarted then
         startSessionTimer()
       else
+        if isSystemSoundsEnabled then
+          buzzer.system(sysSound.hint)
+        end
         if screen.popYesOrNo("Detected previous\ncharge cycle. Resettimer to zero?", color.lightGreen) then
           startSessionTimer()
         else
@@ -80,7 +126,7 @@ function startCharging()
         end
       end
       isChargeStarted = true
-      timerFineStart = sys.gTick()
+      timerFineStart = sys.gTick() 
       timerFineNow = sys.gTick() + 2000 -- allow screen to be updated on first loop iteration
       isStatusbarOverridden = false
       isOvertemperatureFault = false
@@ -266,7 +312,7 @@ function startCharging()
           -- charge settings
           screen.drawRect(94, 3, 159, 58, color.lightGreen)
           screen.showString(97, 0, "-Chg. Set", font.f0508, color.lightGreen) -- preceding hyphen creates 1 pixel space between border and title text on left
-          if ((os.clock() - sessionTimerStart) % 10) < 5 then -- alternate between showing precharge voltage and current
+          if (isSessionTimerEnabled and (((sys.gTick() / 1000) - sessionTimerStart) % 10) or ((sys.gTick() / 1000) % 10)) < 5 then -- alternate between showing precharge voltage and current. if session timer is stopped, then ignore the session timer start time (this line would otherwise freeze on either PC or PV display). there may be a transient effect where the display flips between PC and PV for a brief moment when the session timer stops, but this is purely a cosmetic glitch that occurs during the start->stop transition. Shizuku firmware v1.00.62 caused os.date() to advance 10 times faster than it should, so all calls to os.date() are now replaced with calls to sys.gTick() which has a 1ms granularity
             screen.showString(103, 9, string.format("PC %0.3fA", prechargeCRate * chargeCurrent), font.f1212, color.lightGreen)
           else
             if ((voltsPerCellPrecharge * numCells) < 10) then
@@ -306,11 +352,11 @@ function startCharging()
           end
           -- dynamic statusbar that changes periodically
           if not isStatusbarOverridden then
-            if ((os.clock() - sessionTimerStart) % 10) < 2.5 then
+            if (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 2.5 then
               printStatusbar(string.format("Free mem: %d/%dB", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
-            elseif ((os.clock() - sessionTimerStart) % 10) < 5 then
+            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 5 then
               printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
-            elseif ((os.clock() - sessionTimerStart) % 10) < 7.5 then
+            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 7.5 then
               printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), color.grey, color.grey)
             else
               if regLoopMode == 1 then
@@ -320,7 +366,7 @@ function startCharging()
               end
             end
           else
-            if (os.clock() % 10) < 5 then -- alternate between override text and cumulative charge
+            if ((sys.gTick() / 1000) % 10) < 5 then -- alternate between override text and cumulative charge
               printStatusbar(statusbarOverrideText, statusbarOverrideColor, statusbarOverrideColor)
             else  
               printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), statusbarOverrideColor, statusbarOverrideColor)
@@ -333,7 +379,7 @@ function startCharging()
         end
         timerFineNow = sys.gTick()  
         
-        if aggressiveGcThreshold > 0 and sys.gFreeHeap() < aggressiveGcThreshold then -- can't rely on automatic GC to save us if we run low on RAM
+        if sys.gFreeHeap() < aggressiveGcThreshold then -- can't rely on automatic GC to save us if we run low on RAM
           collectgarbage("collect") -- YEET THE GARBAGE
         end
         

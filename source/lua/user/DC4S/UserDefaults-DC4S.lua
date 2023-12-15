@@ -1,5 +1,5 @@
 --[[DingoCharge for Shizuku Platform - User-Defined Default Settings
-https://ripitapart.com November 16, 2021.
+https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 
 Version history:
 1.0.0: Initial public release (2022-06-30).
@@ -39,7 +39,24 @@ Version history:
        Added LM135/LM235/LM335 support as external temperature sensors (2023-01-21).
        Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
        Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
-       Changed how USB-C CC attachment errors are handled; user can retry the detection instead of needing to restart the charge setup procedure (2023-01-28).]]
+       Changed how USB-C CC attachment errors are handled; user can retry the detection instead of needing to restart the charge setup procedure (2023-01-28).
+1.6.0: Added check to verify battery voltage is at least 3 volts (no PPS adapter will likely support less than this) (2023-01-29).
+       Changed how adapter detection works during compatibility test; voltages higher than 5.5V will also trigger an "adapter is not plugged in" message (2023-02-01).
+       Removed redundant aggressive GC threshold check while charging (2023-02-02).
+       Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
+       Added check to ensure the Lua fastChgTrig module is available on startup (2023-02-04).
+       Lowered the low/high constant-current deadband threshold from 500 to 200mA to reduce charging current oscillation at lower charging rates (2023-05-21).
+       Changed external temperature sensor setup exit display to use 'ºC' sign instead of just 'C' (2023-07-31).
+       Added more system sounds for charge errors and prompts (2023-11-01).
+       Streamlined configuration checker to reduce redundant code and unload itself when finished (2023-11-01).
+       Added error sound if a configuration error is found (2023-11-01).
+       Fixed issue where elapsed time (and Time Limit) advances 10x faster than intended on firmware v1.00.62 (2023-12-11).
+       Fixed issue where the Chg. Set display does not flip between precharge current and voltage once the session timer stops (2023-12-11).
+       Added 3.3Vpc charge voltage for LiFePO4 storage (2023-12-11).
+       Streamlined charge voltage menu code (2023-12-14).
+       Changed header to point directly to official GitHub repository (2023-12-15).
+       Changed About dialog to point to official GitHub repository (2023-12-15).]]
+
 
 
 -- I guess this is easier than trying to build a configuration file parser...
@@ -106,7 +123,7 @@ function setDeadbandDefaults()
   pcDeadband = 0.01 -- Amps, precharge mode
   ccDeadbandNormal = 0.025 -- Amps, constant-current mode
   ccDeadbandLow = 0.01 -- Amps, constant-current mode for lower currents
-  ccDeadbandThreshold = 0.5 -- Amps, use low deadband if current < threshold
+  ccDeadbandThreshold = 0.2 -- Amps, use low deadband if current < threshold
   cvDeadband = 0.01 -- Volts, constant-voltage mode
   tcDeadband = 0.01 -- Amps, end-of-charge mode
   

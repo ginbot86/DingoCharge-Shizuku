@@ -1,5 +1,5 @@
 --[[DingoCharge for Shizuku Platform - Lua to LC Converter (Menus/Libraries)
-https://ripitapart.com November 16, 2021.
+https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 
 Version history:
 1.0.0: Initial public release (2022-06-30).
@@ -7,7 +7,9 @@ Version history:
 1.3.0: Added compile for second menu library, with memory cleanup in between libraries (2022-12-13).
 1.4.0: Removed monolithic Menu Library 1/2; now compiles from a list of files for each menu/library (2022-12-15).
 1.5.0: Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
-       Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).]]
+       Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
+1.6.0: Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
+       Changed header to point directly to official GitHub repository (2023-12-15).]]
 
 filePath = "0:/lua/user/DC4S/lib/DC4S-"
 fileNames = { "advancedMenu",
@@ -30,7 +32,8 @@ fileNames = { "advancedMenu",
               "cfgVpc",
               "chargerSetup",
               "checkConfigs",
-              "startCharging" }
+              "startCharging",
+              "testCompatibility" }
 fileExtension = ".lua"
 
 

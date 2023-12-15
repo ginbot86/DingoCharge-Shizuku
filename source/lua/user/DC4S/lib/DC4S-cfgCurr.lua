@@ -1,10 +1,11 @@
 --[[DingoCharge for Shizuku Platform - Charge Current Configuration Menu
-https://ripitapart.com December 15, 2022.
+https://github.com/ginbot86/DingoCharge-Shizuku December 15, 2022.
 
 Version history:
 1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
 1.5.0: Changed the low-current deadband threshold to activate if charge current is less than the threshold instead of less than/equal to (2023-01-01).
-       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).]]
+       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).
+1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).]]
 
 -- TODO: reduce the redundant code in these menus...
 function cfgCurr()
