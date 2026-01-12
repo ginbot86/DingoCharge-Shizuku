@@ -56,12 +56,19 @@ Version history:
        Added 3.3Vpc charge voltage for LiFePO4 storage (2023-12-11).
        Streamlined charge voltage menu code (2023-12-14).
        Changed header to point directly to official GitHub repository (2023-12-15).
-       Changed About dialog to point to official GitHub repository (2023-12-15).]]
+       Changed About dialog to point to official GitHub repository (2023-12-15).
+1.7.0: Fixed issue where error sound would not play if an initial PD request failed (2024-01-17).
+       Fixed issue where "Ready to charge. Plug in battery now" modal dialog could cause a PD timeout if the dialog is not acknowledged in time (2026-01-10).
+       Replaced aforementioned modal dialog with an interstitial "Ready to charge" screen that maintains PD requests until battery connection is detected, or automatic timeout to enter the charge session (2026-01-10).
+       Fixed issue where the session timer would not restore correctly when restarting a charge session (2026-01-10).
+       Removed version history from the user defaults file (2026-01-10).
+       Added version mismatch checking for user defaults file (2026-01-10).
+       Added PD request latency measurement in statusbar (2026-01-10).]]
 
 
 
 scriptVerMajor = 1
-scriptVerMinor = 6
+scriptVerMinor = 7
 scriptPatchVer = 0
 
 -- Default settings are stored in a separate file:
@@ -188,7 +195,7 @@ function updateSessionTimer()
   if isSessionTimerEnabled then
     sessionTimerNow = sys.gTick() / 1000
   else
-    sessionTimerStart = sessionTimerStart + ((sys.gTick() / 1000) - sessionTimerNow) -- advance start timer to compensate for time spent while session timer stopped
+    sessionTimerStart = (sessionTimerStart - sessionTimerNow) + (sys.gTick() / 1000) -- advance start timer to compensate for time spent while session timer stopped
     sessionTimerNow = sys.gTick() / 1000
   end
 end
@@ -225,7 +232,7 @@ timerFineNow = sys.gTick()
 isChargeStarted = false
 isStatusbarOverridden = false
 statusbarOverrideColor = color.red
-statusbarOverrideText = "oops uwu" -- will only appear if override text is not defined before displaying it
+statusbarOverrideText = "oops uwu" -- will only appear if override text is not defined before displaying it, and that would be a bug!
 
 screen.popHint(string.format("DingoCharge v%d.%d", scriptVerMajor, scriptVerMinor), 1000)
 
@@ -248,7 +255,7 @@ while true do
     require "lua/user/DC4S/lib/DC4S-advancedMenu"
     advancedMenu()
   elseif mainMenuSel == 3 then
-    if (screen.popMenu({"<       Main Menu       ", "DingoCharge for Shizuku", "github.com/ginbot86[...]", "/DingoCharge-Shizuku","(C) Jason Gin 2021-2023", string.format("Version: v%d.%d.%d", scriptVerMajor, scriptVerMinor, scriptPatchVer), ":3"}) == 6) then
+    if (screen.popMenu({"<       Main Menu       ", "DingoCharge for Shizuku", "github.com/ginbot86[...]", "/DingoCharge-Shizuku","(C) Jason Gin 2021-2026", string.format("Version: v%d.%d.%d", scriptVerMajor, scriptVerMinor, scriptPatchVer), ":3"}) == 6) then
       screen.popHint("OwO", 1000, color.green) -- what's this? (it's an Easter egg! :3)
     end
   elseif mainMenuSel == 4 then

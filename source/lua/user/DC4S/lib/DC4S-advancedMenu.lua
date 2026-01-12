@@ -4,7 +4,8 @@ https://github.com/ginbot86/DingoCharge-Shizuku December 15, 2022.
 Version history:
 1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
 1.5.0: Changed how aggressive GC is enabled/disabled; set aggressiveGcThreshold to 0 instead of isAggressiveGcEnabled to false (not that you should do this anyway...) (2023-01-08).
-1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).]]
+1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).
+1.7.0: Added configuration panel to control wait-for-battery timeout behaviour (2026-01-10).]]
 
 function advancedMenu()
   local advMenuSel = 0
@@ -12,6 +13,8 @@ function advancedMenu()
   local soundMenuEntry = " "
   local tempDisplayMenuEntry = " "
   local timeLimitMenuEntry = " "
+  local waitForBatteryMenuEntry = " "
+  
   while true do
       collectgarbage("collect") -- clean up memory before we get into the menus
     if aggressiveGcThreshold == 0 then
@@ -34,8 +37,14 @@ function advancedMenu()
     else
       timeLimitMenuEntry = string.format("Time Limit: %dh", timeLimitHours)
     end
+    if waitForBatteryTimeout == 0 then
+      waitForBatteryMenuEntry = "Wait for Batt: Disabled"
+    else
+      waitForBatteryMenuEntry = string.format("Wait for Batt: %ds", waitForBatteryTimeout)
+    end  
+
     screen.clear()
-    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("CC Fallback: %.2fC", ccFallbackRate),"Chg Reg Deadband...", tempDisplayMenuEntry, "Ext Temp Sensor...", timeLimitMenuEntry, string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, "Restore All Defaults"})
+    advMenuSel = screen.popMenu({"<       Main Menu       ", "Battery Precharge...", string.format("Cable Resistance: %.3f\3", cableResistance), string.format("CC Fallback: %.2fC", ccFallbackRate),"Chg Reg Deadband...", tempDisplayMenuEntry, "Ext Temp Sensor...", timeLimitMenuEntry, string.format("Refresh Rate: %d ms",refreshInterval), gcMenuEntry, soundMenuEntry, waitForBatteryMenuEntry, "Restore All Defaults"})
     screen.clear()
     if advMenuSel == 1 then
       require "lua/user/DC4S/lib/DC4S-cfgPreChg"
@@ -68,6 +77,9 @@ function advancedMenu()
       require "lua/user/DC4S/lib/DC4S-cfgSounds"
       cfgSounds()
     elseif advMenuSel == 11 then
+      require "lua/user/DC4S/lib/DC4S-cfgWaitForBattery"
+      cfgWaitForBattery()
+    elseif advMenuSel == 12 then
       if (screen.popYesOrNo("Restore defaults?",color.yellow)) then
         resetAllDefaults()
         screen.popHint("Defaults Restored", 1000)

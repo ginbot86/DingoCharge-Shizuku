@@ -1,63 +1,11 @@
 --[[DingoCharge for Shizuku Platform - User-Defined Default Settings
 https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 
-Version history:
-1.0.0: Initial public release (2022-06-30).
-1.1.0: Fixed issue where setting cell count does not update precharge voltage. (2022-07-22).
-       Fixed issue where precharge voltage did not display (correctly) during charge. (2022-10-12).
-       Added CC fallback when in CV mode and charge current overshoots too much (2022-10-12).
-       Added an option to display system temperature in Fahrenheit (2022-10-12).
-       Added 2.5V/cell and 8S cell configurations (2022-10-13).
-1.1.1: Fixed issue where some chargers' current-limiting conflicted with CV control loop (2022-10-15).
-1.1.2: Fixed issue where setting 8S configuration would result in a Config Error message (2022-10-20).
-1.2.0: Added prompt to retry the compatibility test if Vbus voltage is not present, instead of outright failing (2022-11-06).
-       Added CC deadband threshold tweaks to fix an issue where setting charge current overwrites the user's defaults (2022-11-06).
-       Fixed issue where double-tapping Select key in "Advanced... > Chg Reg Deadband" menu does not go up a level (2022-11-06).
-1.3.0: Fixed issue where 3.65Vpc was considered standard Li-ion in terms of precharge voltage instead of LiFePO4 (2022-11-17).
-       Added test to verify configuration immediately upon startup (2022-12-12).
-       Added memory cleanup routine after reading PDOs from adapter (2022-12-12).
-       Changed internal version format (2022-12-12).
-       Added statusbar override support for charge termination/faults (2022-12-13).
-       Added support for TMP3x/LM35/LM50 external temperature sensor on D+ pin (2022-12-13).
-       Added optional over/undertemperature protection when using external sensor (2022-12-13).
-       Added charge timeout protection (2022-12-13).
-       Fixed issue where resuming session timer counts time while timer was stopped (2022-12-13).
-       Added second menu library file due to RAM space exhaustion (2022-12-13).
-       Decreased aggressive GC threshold from 16K to 4K but added more forced GCs to mitigate RAM exhaustion (2022-12-13).
-1.4.0: Split off monolithic menu library functions into individual files, reducing RAM consumption significantly (2022-12-15).
-       Increased aggressive GC threshold from 4K to 16K due to RAM usage savings from modularization (2022-12-15).
-       Changed charge error messages to reflect if recovery is enabled (i.e. "paused" vs. "stopped") (2022-12-18).
-       Fixed issue where precharge was not subject to the safety time limit (2022-12-18).
-       Added cumulative charge/energy display for the current charge session (2022-12-24).
-       Updated free memory counter to specify count in bytes (2022-12-24).
-       Changed how the UI calculates when to show different statusbar messages (2012-12-24).
-1.5.0: Changed the low-current deadband threshold to activate if charge current is less than the threshold instead of less than/equal to (2023-01-01).
-       Updated copyright string in About screen to read "(C) 2021-2023".
-       Changed the default cell count to 2S for improved user experience; most PPS adapters go to 11V so a compatibility fail out of the box kinda sucks... (2023-01-06).
-       Changed how aggressive GC is enabled/disabled; set aggressiveGcThreshold to 0 instead of isAggressiveGcEnabled to false (not that you should do this anyway...) (2023-01-08).
-       Fixed issue where configuration menu libraries remain resident in memory even when no longer needed (2023-01-21).
-       Added LM135/LM235/LM335 support as external temperature sensors (2023-01-21).
-       Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
-       Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
-       Changed how USB-C CC attachment errors are handled; user can retry the detection instead of needing to restart the charge setup procedure (2023-01-28).
-1.6.0: Added check to verify battery voltage is at least 3 volts (no PPS adapter will likely support less than this) (2023-01-29).
-       Changed how adapter detection works during compatibility test; voltages higher than 5.5V will also trigger an "adapter is not plugged in" message (2023-02-01).
-       Removed redundant aggressive GC threshold check while charging (2023-02-02).
-       Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
-       Added check to ensure the Lua fastChgTrig module is available on startup (2023-02-04).
-       Lowered the low/high constant-current deadband threshold from 500 to 200mA to reduce charging current oscillation at lower charging rates (2023-05-21).
-       Changed external temperature sensor setup exit display to use 'ºC' sign instead of just 'C' (2023-07-31).
-       Added more system sounds for charge errors and prompts (2023-11-01).
-       Streamlined configuration checker to reduce redundant code and unload itself when finished (2023-11-01).
-       Added error sound if a configuration error is found (2023-11-01).
-       Fixed issue where elapsed time (and Time Limit) advances 10x faster than intended on firmware v1.00.62 (2023-12-11).
-       Fixed issue where the Chg. Set display does not flip between precharge current and voltage once the session timer stops (2023-12-11).
-       Added 3.3Vpc charge voltage for LiFePO4 storage (2023-12-11).
-       Streamlined charge voltage menu code (2023-12-14).
-       Changed header to point directly to official GitHub repository (2023-12-15).
-       Changed About dialog to point to official GitHub repository (2023-12-15).]]
+Version history is removed from this file since version 1.7.0. See the main DingoCharge-Shizuku.lua source or the GitHub project page for detailed version information.]]
 
-
+configVerMajor = 1
+configVerMinor = 7
+configPatchVer = 0
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from
@@ -164,7 +112,7 @@ function setCableResistanceDefaults()
   --   as it poses a risk of damaging the battery through overvoltage. A safe
   --   value is about half of the calculated downstream resistance:
   --   cableResistance = (Vbus_meter - Vbat) / Icharge
-  cableResistance = 0
+  cableResistance = 0 -- ohms
 end
 
 function setCcFallbackDefaults()
@@ -215,6 +163,14 @@ function setTimeLimitDefaults()
   timeLimitHours = 24 -- set to 0 to disable
 end
 
+function setWaitForBatteryDefaults()
+  -- DingoCharge can wait for the battery to be connected to the tester before
+  --   beginning its current ramp-up. The timeout value allows a battery that
+  --   is overdischarged (BMS in undervoltage lockout) to be charged even if
+  --   it does not present any voltage on its terminals.
+  waitForBatteryTimeout = 15 -- seconds; set to 0 to disable (start charging immediately, not recommended)
+end
+
 function resetAllDefaults()
   -- This function is called upon program initialization. All of the referenced
   --   functions above must be called here to ensure all settings are applied
@@ -230,4 +186,5 @@ function resetAllDefaults()
   setTemperatureDisplayDefaults()
   setExternalTemperatureDefaults()
   setTimeLimitDefaults()
+  setWaitForBatteryDefaults()
 end

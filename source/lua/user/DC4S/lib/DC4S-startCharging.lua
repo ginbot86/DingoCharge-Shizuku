@@ -10,12 +10,25 @@ Version history:
        Added check to verify that the battery voltage does not already exceed the configured charging voltage (2023-11-01).
        Fixed issue where elapsed time (and Time Limit) advances 10x faster than intended on firmware v1.00.62 (2023-12-11).
        Fixed issue where the Chg. Set display does not flip between precharge current and voltage once the session timer stops (2023-12-11).
-       Changed header to point directly to official GitHub repository (2023-12-15).]]
+       Changed header to point directly to official GitHub repository (2023-12-15).
+1.7.0: Fixed issue where error sound would not play if an initial PD request failed (2024-01-17).
+       Fixed issue where "Ready to charge. Plug in battery now" modal dialog could cause a PD timeout if the dialog is not acknowledged in time (2026-01-10).
+       Replaced aforementioned modal dialog with an interstitial "Ready to charge" screen that maintains PD requests until battery connection is detected, or automatic timeout to enter the charge session (2026-01-10).
+       Added PD request latency measurement in statusbar (2026-01-10).
+       Tweaked charge stage transition thresholds (2026-01-10).]]
 
 function startCharging()
+
+  isSessionTimerClearable = true
+  if isChargeStarted then -- allow session timer to be reset before starting the actual charge cycle
+    if not screen.popYesOrNo("Detected previous\ncharge cycle. Resettimer to zero?", color.lightGreen) then
+      isSessionTimerClearable = false
+    end
+  end
+  
   meter.setDataSource(meter.INSTANT) -- using the API's meter filtering modes causes regulation instability
   
-  if screen.popYesOrNo("Unplug adapter thenplug in battery", color.cyan) then
+  if screen.popYesOrNo("Unplug adapter thenplug in battery\n\nNo battery voltage?Plug in adapter", color.cyan) then
   
     if (meter.readVoltage() > voltsPerCell * numCells) then -- verify battery voltage does not already exceed the configured charging voltage
       if isSystemSoundsEnabled then
@@ -89,13 +102,7 @@ function startCharging()
       if isSystemSoundsEnabled then
         buzzer.system(sysSound.hint)
       end
-      if not (screen.popYesOrNo("Ready to charge.\nPlug in battery now", color.lightGreen)) then
-        closePdSession()
-        startCharging = nil
-        package.loaded["lua/user/DC4S/lib/DC4S-startCharging"] = nil
-        collectgarbage("collect")
-        return false
-      end
+
       if (initialVbat < (voltsPerCellPrecharge * numCells)) then
         chargeStage = 1 -- precharge
         regLoopMode = 0 -- CC mode, 1 for CV
@@ -110,21 +117,26 @@ function startCharging()
         setpointDeadband = ccDeadband
       end
 
+      require "lua/user/DC4S/lib/DC4S-waitForBattery"
+      if not waitForBattery() then -- display modified UI, keep PD requests alive, and wait until charge current is detected, or timer runs out
+        closePdSession()
+        startCharging = nil
+        package.loaded["lua/user/DC4S/lib/DC4S-startCharging"] = nil
+        collectgarbage("collect")
+        return false
+      end
+
       vbusOffset = nil
       initialVbat = nil
       initialVbus = nil
-      if not isChargeStarted then
+      
+      if isSessionTimerClearable then
         startSessionTimer()
       else
-        if isSystemSoundsEnabled then
-          buzzer.system(sysSound.hint)
-        end
-        if screen.popYesOrNo("Detected previous\ncharge cycle. Resettimer to zero?", color.lightGreen) then
-          startSessionTimer()
-        else
-          resumeSessionTimer()
-        end
+        updateSessionTimer()
+        resumeSessionTimer()
       end
+
       isChargeStarted = true
       timerFineStart = sys.gTick() 
       timerFineNow = sys.gTick() + 2000 -- allow screen to be updated on first loop iteration
@@ -138,7 +150,7 @@ function startCharging()
         -- charge regulation
         if regLoopMode == 0 then -- constant-current mode
           -- test for transfer to CC or CV mode
-          if (meter.readVoltage() > ((regLoopVoltage - cvDeadband) + (readCurrentSigned() * cableResistance))) then 
+          if (meter.readVoltage() > (regLoopVoltage + (readCurrentSigned() * cableResistance))) then -- try transitioning in the middle of the setpoint deadband range rather than as soon as possible
             if (chargeStage == 1) then -- move to CC stage
               chargeStage = 2
               regLoopCurrent = chargeCurrent
@@ -154,10 +166,18 @@ function startCharging()
               regLoopCurrent = 0
             end
           end
+          -- alternate CC->CV transition check for an edge case: if we are in CC stage, our CV AND PD request voltages are maxed out, and present current going into the battery is less than 80% of CC current, then we are effectively in CV stage (so we need to start thinking like it)
+          if chargeStage == 2 and voltsPerCell * numCells == maxVoltage and targetVoltage == maxVoltage and meter.readCurrent() < chargeCurrent * 0.8 then
+            chargeStage = 3
+            regLoopMode = 1
+            regLoopCurrent = termCRate * chargeCurrent
+            regLoopVoltage = voltsPerCell * numCells
+            setpointDeadband = cvDeadband
+          end
           setpointDeviation = readCurrentSigned() - regLoopCurrent
         elseif regLoopMode == 1 then -- constant-voltage mode
         -- test for transfer to idle mode upon termination
-          if (meter.readCurrent() < regLoopCurrent) then
+          if (meter.readCurrent() < (regLoopCurrent - tcDeadband)) then -- delay termination until we're at the lower edge of the deadband
             chargeStage = 4
             regLoopMode = 0
             regLoopCurrent = 0
@@ -294,7 +314,8 @@ function startCharging()
           targetVoltage = minVoltage
         end
         
-        if (pdSink.request(bestPdo, targetVoltage, maxCurrent) ~= pdSink.OK) then
+        pdRequestTimerStart = sys.gTick()
+        if (pdSink.request(bestPdo, targetVoltage, maxCurrent) ~= pdSink.OK) then -- this is the only way to allow exiting the charge session, but also breaks the regulation since new PD requests cannot be sent while waiting for user input...
           if isSystemSoundsEnabled then
             buzzer.system(sysSound.alarm)
           end
@@ -302,6 +323,8 @@ function startCharging()
             break
           end
         end      
+        pdRequestTimerNow = sys.gTick() -- technically the PD request timer will continue advancing while in the modal dialog, but that's inconsequential since we're either exiting, or the timer will get overwritten on the next loop iteration anyway, and in the worst case that would be visible for 1 display refresh interval
+
         
         if ((timerFineNow - timerFineStart) >= refreshInterval) then         
           screen.clear()
@@ -352,18 +375,20 @@ function startCharging()
           end
           -- dynamic statusbar that changes periodically
           if not isStatusbarOverridden then
-            if (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 2.5 then
+            if (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 3 then
               printStatusbar(string.format("Free mem: %d/%dB", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
-            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 5 then
+            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 6 then
               printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
-            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 10) < 7.5 then
+            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 9 then
               printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), color.grey, color.grey)
-            else
+            elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 12 then
               if regLoopMode == 1 then
                 printStatusbar(string.format("Setpoint: %.3f/%.3fV", setpointDeviation, setpointDeadband), color.grey, color.grey)
               else
                 printStatusbar(string.format("Setpoint: %.3f/%.3fA", setpointDeviation, setpointDeadband), color.grey, color.grey)
               end
+            else
+              printStatusbar(string.format("PD req latency: %dms", pdRequestTimerNow - pdRequestTimerStart), color.grey, color.grey)
             end
           else
             if ((sys.gTick() / 1000) % 10) < 5 then -- alternate between override text and cumulative charge
@@ -387,9 +412,12 @@ function startCharging()
           cumCharge = cumCharge + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readCurrentSigned()) / 3600) -- Shizuku Lua API does not expose built-in accumulation group functionality; need to implement it ourselves
           cumEnergy = cumEnergy + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readPowerSigned()) / 3600)
         end
-      end
+      end -- end of main program/UI loop
     
     else
+      if isSystemSoundsEnabled then
+        buzzer.system(sysSound.alarm)
+      end
       screen.clear()
       screen.showDialog("PD Request Failed", "Failed to receive\nready message from\nadapter!", 5000, true, color.red)
     end
