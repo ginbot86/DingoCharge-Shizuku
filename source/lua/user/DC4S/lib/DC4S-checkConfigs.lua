@@ -5,7 +5,9 @@ Version history:
 1.4.0: Split off monolithic menu library functions into individual files (2022-12-15).
 1.6.0: Streamlined configuration checker to reduce redundant code and unload itself when finished (2023-11-01).
        Added error sound if a configuration error is found (2023-11-01).
-       Changed header to point directly to official GitHub repository (2023-12-15).]]
+       Changed header to point directly to official GitHub repository (2023-12-15).
+1.7.0: Added version mismatch checking for user defaults file (2026-01-10).
+       Added wait-for-battery timeout checking (2026-01-10).]]
 
 function checkConfigs()
   local returnStatus = false
@@ -13,7 +15,20 @@ function checkConfigs()
   local errorDisplayTime = 3000
   
   -- This function can only display one error at a time; the first matching error in the list will be displayed
-  if (chargeCurrent <= 0) then
+  if ((configVerMajor == nil) or (configVerMinor == nil) or (configPatchVer == nil)) then
+    errorString = string.format("Config file versionvar(s) missing!\nNil variable(s):\n")
+    if configVerMajor == nil then
+      errorString = errorString .. "configVerMajor\n"
+    end
+    if configVerMinor == nil then
+      errorString = errorString .. "configVerMinor\n"
+    end
+    if configPatchVer == nil then
+      errorString = errorString .. "configPatchVer"
+    end
+  elseif ((scriptVerMajor ~= configVerMajor) or (scriptVerMinor ~= configVerMinor) or (scriptPatchVer ~= configPatchVer)) then
+    errorString = string.format("Script/config file\nversion mismatch!\n\nv%d.%d.%d != v%d.%d.%d", scriptVerMajor, scriptVerMinor, scriptPatchVer, configVerMajor, configVerMinor, configPatchVer)
+  elseif (chargeCurrent <= 0) then
     errorString = string.format("Invalid charging\ncurrent!\n\n%.3fA <= 0.000A", chargeCurrent)
   elseif (chargeCurrent > 5) then
     errorString = string.format("Invalid charging\ncurrent!\n\n%.3fA > 5.000A", chargeCurrent)
@@ -48,6 +63,8 @@ function checkConfigs()
   elseif (undertemperatureThresholdC > overtemperatureThresholdC) then
     errorString = string.format("Invalid undertemp\nthreshold!\n(UTP > OTP)\n\n%d\1 > %d\1", undertemperatureThresholdC, overtemperatureThresholdC)
     errorDisplayTime = 5000
+  elseif (waitForBatteryTimeout < 0) then
+    errorString = string.format("Invalid wait-for-\nbattery timeout!\n\n%ds < 0", waitForBatteryTimeout)
   else
     returnStatus = true
   end

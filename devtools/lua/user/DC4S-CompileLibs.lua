@@ -9,7 +9,8 @@ Version history:
 1.5.0: Split off charge control function into a separate file which unloads upon termination to conserve memory (2023-01-27).
        Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
 1.6.0: Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
-       Changed header to point directly to official GitHub repository (2023-12-15).]]
+       Changed header to point directly to official GitHub repository (2023-12-15).
+1.7.0: Added Wait-For-Battery Helper function (2026-01-10).]]
 
 filePath = "0:/lua/user/DC4S/lib/DC4S-"
 fileNames = { "advancedMenu",
@@ -30,10 +31,12 @@ fileNames = { "advancedMenu",
               "cfgTempDisplay",
               "cfgTimeLimit",
               "cfgVpc",
+              "cfgWaitForBattery",
               "chargerSetup",
               "checkConfigs",
               "startCharging",
-              "testCompatibility" }
+              "testCompatibility",
+              "waitForBattery"}
 fileExtension = ".lua"
 
 
