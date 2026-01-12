@@ -76,7 +76,7 @@ To install DingoCharge onto your tester:
 		                - `DC4S-checkConfigs.lc`
 		                - `DC4S-startCharging.lc`
 		                - `DC4S-testCompatibility.lc`
-                    - `DC4S-waitForBattery.lc`
+                    	- `DC4S-waitForBattery.lc`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
@@ -119,3 +119,4 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Visit the [official GitHub repository](https://github.com/ginbot86/DingoCharge-Shizuku) for more information, or to file an issue/bug report. Additional information on how to use DingoCharge can be found on the [Wiki](https://github.com/ginbot86/DingoCharge-Shizuku/wiki) there.
 
 If you do not have/want a GitHub account, the author can also be contacted via email at jasongin (at) jasongin (dot) com. No guarantees are provided that your email will necessarily be answered (in a timely manner), but a best-effort response can generally be anticipated.
+
