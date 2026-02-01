@@ -5,7 +5,7 @@ Version history is removed from this file since version 1.7.0. See the main Ding
 
 configVerMajor = 1
 configVerMinor = 8
-configPatchVer = 0
+configPatchVer = 1
 
 -- I guess this is easier than trying to build a configuration file parser...
 -- Note: as versions are updated, this file should be replaced with one from

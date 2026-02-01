@@ -70,11 +70,12 @@ Version history:
        Added an extended string print function that supports limited bold text display (2026-01-28).
        Added a crash handler that will save a log and can print error information onscreen if desired (2026-01-30).
        Moved main code into a separate file; all new version changes will be recorded in DC4S-main.lua source (2026-01-30).
-       Replaced main code with the crash handler to improve program robustness (2026-01-30).]]
+       Replaced main code with the crash handler to improve program robustness (2026-01-30).
+1.8.1: Fixed issue where very low termination currents (≤ termination deadband) would prevent CV termination from triggering (2026-01-31).]]
 
 scriptVerMajor = 1
 scriptVerMinor = 8
-scriptPatchVer = 0
+scriptPatchVer = 1
 
 function main() -- Main program code is now stored in its own file as of version 1.8.0
   -- Default settings are stored in a separate file:
