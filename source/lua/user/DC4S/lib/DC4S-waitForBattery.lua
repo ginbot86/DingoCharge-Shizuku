@@ -3,9 +3,10 @@ https://github.com/ginbot86/DingoCharge-Shizuku January 10, 2026.
 
 Version history:
 1.7.0: Fixed issue where "Ready to charge. Plug in battery now" modal dialog could cause a PD timeout if the dialog is not acknowledged in time (2026-01-10).
-       Replaced aforementioned modal dialog with an interstitial "Ready to charge" screen that maintains PD requests until battery connection is detected, or automatic timeout to enter the charge session (2026-01-10).]]
+       Replaced aforementioned modal dialog with an interstitial "Ready to charge" screen that maintains PD requests until battery connection is detected, or automatic timeout to enter the charge session (2026-01-10).
+1.8.0: Tweaked how the battery timeout mechanism does its timekeeping (2026-01-29).]]
 
-function waitForBattery()
+function waitForBattery(targetVoltage)
   local batteryWaitTimerStart = sys.gTick() / 1000
   local batteryWaitTimerNow = sys.gTick() / 1000
   local returnStatus = true
@@ -21,8 +22,6 @@ function waitForBattery()
       break
     end
     
-    batteryWaitTimerNow = sys.gTick() / 1000
-
     -- display modified version of main UI (all elements except the statusbar are greyed out but still update dynamically; colour scheme is basically the inverse of the main UI)
     screen.clear()
     -- volts, amps, watts
@@ -82,6 +81,7 @@ function waitForBattery()
     -- flush updated framebuffer contents to screen
     screen.forceUpdate()
     delay.ms(refreshInterval) -- if refreshInterval is set to, e.g. 1 second, then the PD request rate will also be limited to the display rate. not a huge deal since we're not in regulation yet, just keeping PPS alive (max 10 seconds between requests)
+    batteryWaitTimerNow = sys.gTick() / 1000
   end
 
   batteryWaitTimerStart = nil

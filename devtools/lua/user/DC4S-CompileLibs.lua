@@ -10,10 +10,14 @@ Version history:
        Renamed "DC4S-CompileMenu" to "DC4S-CompileLibs" to reflect that non-menu libraries are also compiled here (2023-01-27).
 1.6.0: Split off compatibility test into a separate file which unloads upon termination to conserve memory (2023-02-02).
        Changed header to point directly to official GitHub repository (2023-12-15).
-1.7.0: Added Wait-For-Battery Helper function (2026-01-10).]]
+1.7.0: Added Wait-For-Battery Helper function (2026-01-10).
+1.8.0: Added utility functions library (2026-01-12).
+       Changed "Bytecode failed" error message to "File missing". (2026-01-29).
+       Added main code (2026-01-30).]]
 
 filePath = "0:/lua/user/DC4S/lib/DC4S-"
-fileNames = { "advancedMenu",
+fileNames = { "main",
+              "advancedMenu",
               "cfgAggressiveGc",
               "cfgCableRes",
               "cfgCcFallbackRate",
@@ -34,6 +38,7 @@ fileNames = { "advancedMenu",
               "cfgWaitForBattery",
               "chargerSetup",
               "checkConfigs",
+              "libUtils",
               "startCharging",
               "testCompatibility",
               "waitForBattery"}
@@ -61,7 +66,7 @@ function convertLua(filename)
       return false
     end
   else
-    screen.popHint("Bytecode failed", 1000, color.red)
+    screen.popHint("File missing", 1000, color.red)
     return false
   end
   return true

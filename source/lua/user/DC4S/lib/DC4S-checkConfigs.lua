@@ -7,7 +7,8 @@ Version history:
        Added error sound if a configuration error is found (2023-11-01).
        Changed header to point directly to official GitHub repository (2023-12-15).
 1.7.0: Added version mismatch checking for user defaults file (2026-01-10).
-       Added wait-for-battery timeout checking (2026-01-10).]]
+       Added wait-for-battery timeout checking (2026-01-10).
+1.8.0: Added error string returns to aid in offline troubleshooting (2026-01-30).]]
 
 function checkConfigs()
   local returnStatus = false
@@ -76,10 +77,9 @@ function checkConfigs()
     screen.showDialog("Config Error", errorString, errorDisplayTime, true, color.red)
   end
   
-  errorString = nil
   errorDisplayTime = nil
   checkConfigs = nil
   package.loaded["lua/user/DC4S/lib/DC4S-checkConfigs"] = nil
   collectgarbage("collect") -- clean up memory
-  return returnStatus
+  return returnStatus, errorString
 end

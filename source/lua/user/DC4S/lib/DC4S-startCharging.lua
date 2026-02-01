@@ -15,19 +15,30 @@ Version history:
        Fixed issue where "Ready to charge. Plug in battery now" modal dialog could cause a PD timeout if the dialog is not acknowledged in time (2026-01-10).
        Replaced aforementioned modal dialog with an interstitial "Ready to charge" screen that maintains PD requests until battery connection is detected, or automatic timeout to enter the charge session (2026-01-10).
        Added PD request latency measurement in statusbar (2026-01-10).
-       Tweaked charge stage transition thresholds (2026-01-10).]]
+       Tweaked charge stage transition thresholds (2026-01-10).
+1.8.0: Added bold font to active charge stage indicator (2026-01-24).
+       Changed cable resistance statusbar display to "disabled" instead of showing all-zero calculations (2026-01-30).
+       Tweaked overvoltage clamp threshold with per-cell scaling (2026-01-30).
+       Clarified session timer reset prompt (2026-01-30).
+       Clarified code sections by naming each step (2026-01-30).]]
 
 function startCharging()
-
-  isSessionTimerClearable = true
-  if isChargeStarted then -- allow session timer to be reset before starting the actual charge cycle
-    if not screen.popYesOrNo("Detected previous\ncharge cycle. Resettimer to zero?", color.lightGreen) then
-      isSessionTimerClearable = false
-    end
-  end
+  isStatusbarOverridden = false
+  statusbarOverrideColor = color.red
+  statusbarOverrideText = "oops uwu" -- will only appear if override text is not defined before displaying it, and that would be a bug!
   
   meter.setDataSource(meter.INSTANT) -- using the API's meter filtering modes causes regulation instability
   
+  isSessionTimerClearable = true
+  if isChargeStarted then -- allow session timer to be reset before starting the actual charge cycle
+    if not screen.popYesOrNo("Detected previous\ncharge cycle. Starta new session?", color.lightGreen) then
+      isSessionTimerClearable = false
+    end
+  end
+
+  -- **************************
+  -- *** step 1: check Vbat ***
+  -- **************************
   if screen.popYesOrNo("Unplug adapter thenplug in battery\n\nNo battery voltage?Plug in adapter", color.cyan) then
   
     if (meter.readVoltage() > voltsPerCell * numCells) then -- verify battery voltage does not already exceed the configured charging voltage
@@ -62,6 +73,9 @@ function startCharging()
     return false
   end
 
+  -- ***************************************
+  -- *** step 2: check adapter, init PPS ***
+  -- ***************************************
   require "lua/user/DC4S/lib/DC4S-testCompatibility"
   if (testCompatibility(false) == true) then
     if (initialVbat < minVoltage) then -- cannot safely control precharge current if battery voltage is less than PPS minimum
@@ -79,7 +93,7 @@ function startCharging()
     if (pdSink.request(bestPdo, initialVbat, maxCurrent) == pdSink.OK) then
       initialVbus = meter.readVoltage()
       vbusOffset = initialVbus - initialVbat
-      targetVoltage = (math.ceil((initialVbat - vbusOffset) / 0.02) * 0.02) + 0.04 -- round up to nearest 0.02 and go up 2 steps
+      targetVoltage = (math.ceil((initialVbat - vbusOffset) / 0.02) * 0.02) + 0.04 -- round up to nearest 0.02 and go up 2 steps. this will allow current flow into the battery to be used as a battery detection mechanism
       if (targetVoltage > maxVoltage) then
         targetVoltage = maxVoltage
       elseif (targetVoltage < minVoltage) then
@@ -117,8 +131,11 @@ function startCharging()
         setpointDeadband = ccDeadband
       end
 
+      -- ******************************************
+      -- *** step 3: wait for battery insertion ***
+      -- ******************************************
       require "lua/user/DC4S/lib/DC4S-waitForBattery"
-      if not waitForBattery() then -- display modified UI, keep PD requests alive, and wait until charge current is detected, or timer runs out
+      if not waitForBattery(targetVoltage) then -- display modified UI, keep PD requests alive, and wait until charge current is detected, or timer runs out
         closePdSession()
         startCharging = nil
         package.loaded["lua/user/DC4S/lib/DC4S-startCharging"] = nil
@@ -138,16 +155,22 @@ function startCharging()
       end
 
       isChargeStarted = true
-      timerFineStart = sys.gTick() 
-      timerFineNow = sys.gTick() + 2000 -- allow screen to be updated on first loop iteration
+      timerFineStart = sys.gTick() - 2000 -- allow screen to be updated on first loop iteration
       isStatusbarOverridden = false
       isOvertemperatureFault = false
       isUndertemperatureFault = false
       lastChargeStage = 0
       
-      while true do -- main program/UI loop
+      -- ****************************************
+      -- *** step 4: run main program/UI loop ***
+      -- ****************************************
+      while true do
         loopIterationTimerStart = sys.gTick()
-        -- charge regulation
+        
+        -- #######################
+        -- #  charge regulation  #
+        -- #######################
+        
         if regLoopMode == 0 then -- constant-current mode
           -- test for transfer to CC or CV mode
           if (meter.readVoltage() > (regLoopVoltage + (readCurrentSigned() * cableResistance))) then -- try transitioning in the middle of the setpoint deadband range rather than as soon as possible
@@ -178,6 +201,7 @@ function startCharging()
         elseif regLoopMode == 1 then -- constant-voltage mode
         -- test for transfer to idle mode upon termination
           if (meter.readCurrent() < (regLoopCurrent - tcDeadband)) then -- delay termination until we're at the lower edge of the deadband
+            isChargeStarted = false -- clear the flag that indicates a charge session was previously in progress
             chargeStage = 4
             regLoopMode = 0
             regLoopCurrent = 0
@@ -207,17 +231,23 @@ function startCharging()
         
         if (math.abs(setpointDeviation) > setpointDeadband) then
           if setpointDeviation > 0 then
-            targetVoltage = targetVoltage - 0.02
+            targetVoltage = targetVoltage - 0.02 -- we are limited to 20mV granularity as per PPS specifications
           else
             targetVoltage = targetVoltage + 0.02
           end
         end
         
-        if (chargeStage == 4 or chargeStage == 0) and meter.readVoltage() > voltsPerCell * numCells then -- safety check: prevent voltage from drifting too high after charge termination
-          targetVoltage = targetVoltage - 0.04
+        -- ####################
+        -- #   safety logic   #
+        -- ####################
+        
+        -- safety check: prevent voltage from drifting too high after charge termination
+        if (chargeStage == 4 or chargeStage == 0) and meter.readVoltage() > (voltsPerCell + cvDeadband) * numCells then -- try relaxing the threshold a bit instead of kicking in immediately past the charge voltage limit; scales with number of cells (maybe make this a separate variable later?)
+          targetVoltage = targetVoltage - 0.04 -- 40mV = 2 steps, so this will always take precedence over the regulation's +/- 1 step
         end
 
-        if chargeStage == 3 and meter.readCurrent() > (ccFallbackRate * chargeCurrent) then -- safety check: prevent excessive current overshoot when switching from CC to CV stage
+         -- safety check: prevent excessive current overshoot when switching from CC to CV stage
+        if chargeStage == 3 and meter.readCurrent() > (ccFallbackRate * chargeCurrent) then
           chargeStage = 2
           regLoopMode = 0
           regLoopCurrent = chargeCurrent
@@ -225,7 +255,8 @@ function startCharging()
           setpointDeadband = ccDeadband
         end
         
-        if chargeStage > 0 and chargeStage < 4 and isExternalTemperatureEnabled and ((isOvertemperatureEnabled and readExternalTemperatureCelsius() > overtemperatureThresholdC) or (isUndertemperatureEnabled and readExternalTemperatureCelsius() < undertemperatureThresholdC)) then -- safety check: prevent battery from charging if temperature out of range
+         -- safety check: prevent battery from charging if temperature out of range
+        if chargeStage > 0 and chargeStage < 4 and isExternalTemperatureEnabled and ((isOvertemperatureEnabled and readExternalTemperatureCelsius() > overtemperatureThresholdC) or (isUndertemperatureEnabled and readExternalTemperatureCelsius() < undertemperatureThresholdC)) then
           lastChargeStage = chargeStage
           chargeStage = 0
           regLoopMode = 0
@@ -261,7 +292,8 @@ function startCharging()
           stopSessionTimer()
         end
         
-        if chargeStage > 0 and chargeStage < 4 and termCRate > 0 and timeLimitHours > 0 and ((sessionTimerNow - sessionTimerStart) / 3600) > timeLimitHours then -- safety check: stop charging if it's taking too long to finish
+         -- safety check: stop charging if it's taking too long to finish
+        if chargeStage > 0 and chargeStage < 4 and termCRate > 0 and timeLimitHours > 0 and ((sessionTimerNow - sessionTimerStart) / 3600) > timeLimitHours then
           chargeStage = 0
           regLoopMode = 0
           regLoopCurrent = 0
@@ -275,8 +307,9 @@ function startCharging()
           stopSessionTimer()          
         end
         
+         -- if recovery is enabled, resume charging if the conditions are met
         if chargeStage == 0 and ((isOvertemperatureFault and isOvertemperatureRecoveryEnabled) or (isUndertemperatureFault and isUndertemperatureRecoveryEnabled)) then
-          if (isOvertemperatureFault and readExternalTemperatureCelsius() < overtemperatureThresholdC - temperatureProtectionHysteresisC) or (isUndertemperatureFault and readExternalTemperatureCelsius() > undertemperatureThresholdC + temperatureProtectionHysteresisC) then -- if recovery is enabled, resume charging if the conditions are met
+          if (isOvertemperatureFault and readExternalTemperatureCelsius() < overtemperatureThresholdC - temperatureProtectionHysteresisC) or (isUndertemperatureFault and readExternalTemperatureCelsius() > undertemperatureThresholdC + temperatureProtectionHysteresisC) then
             if isOvertemperatureFault then
               isOvertemperatureFault = false
             elseif isUndertemperatureFault then
@@ -307,6 +340,10 @@ function startCharging()
           end
         end
 
+        -- ########################
+        -- #   send PPS request   #
+        -- ########################
+
         -- ensure requested voltage is within PDO bounds
         if (targetVoltage > maxVoltage) then
           targetVoltage = maxVoltage
@@ -324,9 +361,12 @@ function startCharging()
           end
         end      
         pdRequestTimerNow = sys.gTick() -- technically the PD request timer will continue advancing while in the modal dialog, but that's inconsequential since we're either exiting, or the timer will get overwritten on the next loop iteration anyway, and in the worst case that would be visible for 1 display refresh interval
-
         
-        if ((timerFineNow - timerFineStart) >= refreshInterval) then         
+        -- ######################
+        -- #   status display   #
+        -- ######################
+              
+        if ((sys.gTick() - timerFineStart) >= refreshInterval) then
           screen.clear()
           -- volts, amps, watts
           drawMeter(0, 0, "Voltage", meter.readVoltage(), "V", color.yellow)
@@ -336,23 +376,24 @@ function startCharging()
           screen.drawRect(94, 3, 159, 58, color.lightGreen)
           screen.showString(97, 0, "-Chg. Set", font.f0508, color.lightGreen) -- preceding hyphen creates 1 pixel space between border and title text on left
           if (isSessionTimerEnabled and (((sys.gTick() / 1000) - sessionTimerStart) % 10) or ((sys.gTick() / 1000) % 10)) < 5 then -- alternate between showing precharge voltage and current. if session timer is stopped, then ignore the session timer start time (this line would otherwise freeze on either PC or PV display). there may be a transient effect where the display flips between PC and PV for a brief moment when the session timer stops, but this is purely a cosmetic glitch that occurs during the start->stop transition. Shizuku firmware v1.00.62 caused os.date() to advance 10 times faster than it should, so all calls to os.date() are now replaced with calls to sys.gTick() which has a 1ms granularity
-            screen.showString(103, 9, string.format("PC %0.3fA", prechargeCRate * chargeCurrent), font.f1212, color.lightGreen)
+            showStringExtended(103, 9, string.format("PC %0.3fA", prechargeCRate * chargeCurrent), font.f1212, color.lightGreen, color.black, chargeStage == 1) -- bold font if it's the active charge stage
           else
             if ((voltsPerCellPrecharge * numCells) < 10) then
-              screen.showString(103, 9, string.format("PV %0.3fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen)
+              showStringExtended(103, 9, string.format("PV %0.3fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen, color.black, chargeStage == 1) -- bold font if it's the active charge stage
             else
-              screen.showString(103, 9, string.format("PV %0.2fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen)
+              showStringExtended(103, 9, string.format("PV %0.2fV", voltsPerCellPrecharge * numCells), font.f1212, color.lightGreen, color.black, chargeStage == 1) -- bold font if it's the active charge stage
             end
           end
-          screen.showString(103, 21, string.format("CC %0.3fA", chargeCurrent), font.f1212, color.lightGreen)
+          showStringExtended(103, 21, string.format("CC %0.3fA", chargeCurrent), font.f1212, color.lightGreen, color.black, chargeStage == 2) -- bold font if it's the active charge stage
           if ((voltsPerCell * numCells) < 10) then
-            screen.showString(103, 33, string.format("CV %0.3fV", voltsPerCell * numCells), font.f1212, color.lightGreen)
+            showStringExtended(103, 33, string.format("CV %0.3fV", voltsPerCell * numCells), font.f1212, color.lightGreen, color.black, chargeStage == 3) -- bold font if it's the active charge stage
           else
-            screen.showString(103, 33, string.format("CV %0.2fV", voltsPerCell * numCells), font.f1212, color.lightGreen)
+            showStringExtended(103, 33, string.format("CV %0.2fV", voltsPerCell * numCells), font.f1212, color.lightGreen, color.black, chargeStage == 3) -- bold font if it's the active charge stage
           end
-          screen.showString(103, 45, string.format("TC %0.3fA", termCRate * chargeCurrent), font.f1212, color.lightGreen)
+          showStringExtended(103, 45, string.format("TC %0.3fA", termCRate * chargeCurrent), font.f1212, color.lightGreen, color.black, chargeStage == 4) -- bold font if it's the active charge stage
           if (chargeStage > 0) then -- show marker to indicate which charge stage is active
             screen.showString(97, 9 + (12 * (chargeStage - 1)), ">", font.f1212, color.lightGreen)
+            screen.showString(96, 9 + (12 * (chargeStage - 1)), ">", font.f1212, color.lightGreen, color.transparent) -- bold font
           end
           -- misc info (session timer, PD request voltage, tester temperature)
           screen.drawRect(94, 70, 159, 114, color.lightPurple)
@@ -378,7 +419,11 @@ function startCharging()
             if (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 3 then
               printStatusbar(string.format("Free mem: %d/%dB", sys.gFreeHeap(), sys.gFreeHeapEver()), color.grey, color.grey) -- testing shows that sometimes, when aggressive GC is disabled, free mem only really decrements if we're watching it?! getting real schrodinger's cat vibes here 
             elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 6 then
-              printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
+              if cableResistance > 0 then
+                printStatusbar(string.format("IR comp: %.3fV @ %.3f\3", readCurrentSigned() * cableResistance, cableResistance), color.grey, color.grey)
+              else
+                printStatusbar("IR comp: Disabled", color.grey, color.grey)
+              end
             elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 9 then
               printStatusbar(string.format("Cum: %.3fAh/%.3fWh", cumCharge, cumEnergy), color.grey, color.grey)
             elseif (((sys.gTick() / 1000) - sessionTimerStart) % 15) < 12 then
@@ -401,8 +446,11 @@ function startCharging()
           -- flush updated framebuffer contents to screen, and reset the fine timer so we can wait until it's time to update the screen again
           screen.forceUpdate()
           timerFineStart = sys.gTick()
-        end
-        timerFineNow = sys.gTick()  
+        end 
+        
+        -- #################################
+        -- #   housekeeping & accounting   #
+        -- #################################
         
         if sys.gFreeHeap() < aggressiveGcThreshold then -- can't rely on automatic GC to save us if we run low on RAM
           collectgarbage("collect") -- YEET THE GARBAGE
@@ -412,7 +460,10 @@ function startCharging()
           cumCharge = cumCharge + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readCurrentSigned()) / 3600) -- Shizuku Lua API does not expose built-in accumulation group functionality; need to implement it ourselves
           cumEnergy = cumEnergy + ((((sys.gTick() - loopIterationTimerStart) / 1000) * readPowerSigned()) / 3600)
         end
-      end -- end of main program/UI loop
+      end
+      -- ******************************
+      -- *** end of program/UI loop ***
+      -- ******************************
     
     else
       if isSystemSoundsEnabled then

@@ -4,7 +4,7 @@ https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 Version history is removed from this file since version 1.7.0. See the main DingoCharge-Shizuku.lua source or the GitHub project page for detailed version information.]]
 
 configVerMajor = 1
-configVerMinor = 7
+configVerMinor = 8
 configPatchVer = 0
 
 -- I guess this is easier than trying to build a configuration file parser...

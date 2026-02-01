@@ -1,16 +1,18 @@
-# DingoCharge for Shizuku
+# DingoCharge for Shizuku: Comprehensive, Instrument-Level Software-Defined Battery Charging
 
-DingoCharge for Shizuku (simply referred to DingoCharge hereafter) is a Lua program that runs on the [YK-Lab Shizuku USB-C tester/multimeter](https://yk-lab.org:666/shizuku/manual/software/manual-pc-en-us/content.html), allowing it to become a highly customizable battery charger when connected to a compatible USB-C Power Delivery (PD) adapter that supports PPS (Programmable Power Supply) functionality. This tester is available under various names, like the YK-Lab YK001, AVHzY CT-3, Power-Z KT002, or the ATORCH UT18.
+*Version 1.8.0*
+
+DingoCharge for Shizuku, simply referred to DingoCharge or DC4S hereafter, is a Lua application (implemented as a set of modular scripts) that runs on the [YK-Lab Shizuku USB-C tester/multimeter](https://yk-lab.org:666/shizuku/manual/software/manual-pc-en-us/content.html), allowing it to become a highly customizable battery charger when connected to a compatible USB-C Power Delivery (PD) adapter that supports PPS (Programmable Power Supply) functionality. This tester is available under various names, like the YK-Lab YK001, AVHzY CT-3, Power-Z KT002, ATORCH UT18, or the Helpers Lab XB001A.
 
 ## Caution/disclaimer
 Lithium-ion batteries can be dangerous if mishandled or abused! The author accepts no liability for direct or indirect damages caused by the use of this software, and absolutely no warranties or guarantees are provided. It is ultimately the user's (your) responsibility to understand the potential hazards of working with batteries and other electronics, and to correctly connect the battery to the tester to prevent damage (ensure the voltage ranges are compatible with the tester and adapter, and ensure that the correct polarity is used).
 
 It is **STRONGLY RECOMMENDED** that you use a PCM (protection circuit module) or BMS (battery management system) when using lithium-ion batteries, and especially when charging batteries that have more than one cell in series.
 
-Follow the prompts in the program when they appear, and try to do them promptly (but don't rush yourself). Some steps require user intervention to connect/disconnect the battery and/or adapter, as the tester has no innate switching capabilities; in other words, you are manually performing the work of a relay/switch. :)
+Follow the prompts in the program when they appear. Some steps require user intervention to connect/disconnect the battery and/or adapter, as the tester has no innate switching capabilities; in other words, you are manually performing the work of a relay/switch. :)
 
 ## How does DingoCharge work?
-DingoCharge leverages the [USB PD PPS](https://www.belkin.com/us/support-article?articleNum=318878) protocol to control the amount of current that flows into a rechargeable battery; as of version 1.7.0, only lithium-ion chemistries (and its variants like LiFePO4, "LiHV" and LTO) are officially supported, but experimental sodium-ion, lead-acid and nickel-cadmium/nickel-metal hydride support is underway - see the Wiki mentioned in the Support section for more details. By adjusting the difference between the battery's present voltage and the voltage being supplied from the adapter, the amount of current flowing into the battery can be controlled via closed-loop regulation; this provides software controlled constant-current and constant-voltage operation with better accuracy than the hardware CC-CV functions in many USB-C PD chipsets. The program also provides an easy-to-use interface to set up the required charging parameters (voltage, current, charge termination/cutoff, etc.), and also ensures that the requested settings are compatible with the adapter in use, as not all PD PPS adapters are equal.
+DingoCharge leverages the [USB PD PPS](https://www.belkin.com/us/support-article?articleNum=318878) protocol to control the amount of current that flows into a rechargeable battery; currently only lithium-ion chemistries (and its variants like LiFePO4, "LiHV" and LTO) are officially supported, but experimental sodium-ion, lead-acid and nickel-cadmium/nickel-metal hydride support is underway - see the Wiki mentioned in the Support section for more details. By adjusting the difference between the battery's present voltage and the voltage being supplied from the adapter, the amount of current flowing into the battery can be controlled via closed-loop regulation; this provides software controlled constant-current and constant-voltage operation with better accuracy than the hardware CC-CV functions in many USB-C PD chipsets. The program also provides an easy-to-use interface to set up the required charging parameters (voltage, current, charge termination/cutoff, etc.), and also ensures that the requested settings are compatible with the adapter in use, as not all PD PPS adapters are equal.
 
 The program is built around the [Lua API](https://yk-lab.org:666/index.php/2020/01/09/lua-programming-overview/) feature that is present on the Shizuku platform. The API provides the necessary functions to interact with a USB PD PPS adapter, as well as providing basic routines for the user interface.
 
@@ -21,7 +23,7 @@ DingoCharge is meant for people with existing electronics/battery knowledge (hob
 DingoCharge takes advantage of existing features in hardware that you already purchased (the USB tester, USB-C to USB-C cable(s), and your USB-C PD adapter(s)). With a little bit of extra hardware (USB-C or USB-A plug to the various connections you may need to hook up the battery), you have a highly flexible battery charger for your projects.
 
 ## Extra hardware required
-The only extra hardware required is a USB power cable that connects the VBUS and ground pins to your battery, and a microUSB cable to an external 5 volt USB power source (as of version 1.7.0), and the battery you want to charge (as of version 1.7.0, lithium-ion/lithium iron phosphate batteries with a 1S to 5S (2S to 4S recommended) configuration are supported, with experimental support for 2S-8S lithium-titanate chemistries added but untested). Examples include USB-A to 5.5x2.1mm barrel jacks, XT30/XT60, Deans, SAE, Anderson Powerpole connectors, or alligator clips. If your PD adapter supports PPS with more than 3 amps of current, you will need a suitably rated 5 amp/100 watt USB-C to USB-C cable to connect the tester to the adapter.
+The only extra hardware required is a USB power cable that connects the VBUS and ground pins to your battery, and a microUSB cable to an external 5 volt USB power source, and the battery you want to charge (currently only lithium-ion/lithium iron phosphate batteries with a 1S to 5S (2S to 4S recommended) configuration are officially supported, with experimental support for 2S-8S lithium-titanate chemistries added but untested). Examples include USB-A to 5.5x2.1mm barrel jacks, XT30/XT60, Deans, SAE, Anderson Powerpole connectors, or alligator clips. If your PD adapter supports PPS with more than 3 amps of current, you will need a suitably rated 5 amp/100 watt USB-C to USB-C cable to connect the tester to the adapter.
 
 Since version 1.3.0, DingoCharge supports use of linear analog temperature sensors whose outputs range from 0 to 3.3 volts on the D+ pin (for example, the TMP35/LM35, TMP36/LM50, TMP37, LM135/LM235/LM335). Thermal protections are disabled unless the `Ext Temp Sensor` option is turned on in the `Advanced...` menu or in the user defaults file.
 
@@ -32,10 +34,10 @@ If you are using a USB-C connector to connect the tester to the battery, ensure 
 
 ## Software components
 The program is split into:
-1. Main program (main menu and status display)
-2. Configuration menus and other libraries
+1. Main program (launcher and error/crash handler)
+2. Application code, configuration menus, and other libraries
 3. User preferences/defaults (provided as an editable Lua source file)
-4. Development tools (.lua to .lc converters to compile Lua source into bytecode to conserve memory)
+4. Development tools (.lua to .lc converters to compile Lua source into bytecode to conserve memory, and a colour palette demo)
 
 Only the first three components are mandatory for the program to function correctly. The menu libraries and user preferences/defaults are kept in a subdirectory beneath the main program so that the Shizuku operating system will not list them as executable scripts/programs.
 
@@ -53,6 +55,7 @@ To install DingoCharge onto your tester:
 			    - `DC4S`
 				    - `UserDefaults-DC4S.lua`
 				     - `lib`
+		                - `DC4S-main.lc`
 		                - `DC4S-advancedMenu.lc`
 		                - `DC4S-cfgAggressiveGc.lc`
 		                - `DC4S-cfgCableRes.lc`
@@ -74,9 +77,10 @@ To install DingoCharge onto your tester:
 		                - `DC4S-cfgWaitForBattery.lc`
 		                - `DC4S-chargerSetup.lc`
 		                - `DC4S-checkConfigs.lc`
+		                - `DC4S-libUtils.lc`
 		                - `DC4S-startCharging.lc`
 		                - `DC4S-testCompatibility.lc`
-                    	- `DC4S-waitForBattery.lc`
+		                - `DC4S-waitForBattery.lc`
 5. Wait a few seconds to allow the files to copy over.
 5. Hold down the left key on the tester until a menu pops up again.
    - Scroll down to select the `Unmount USB Mass Storage` option. The tester should display `USB MSC Umounted`.
@@ -105,6 +109,8 @@ Launching DingoCharge is the same as running any other script on the tester. If 
 7. When the charging process is finished, or if you need to make changes to the charge settings, unplug the USB-C cable that connects to the PD PPS adapter. The tester will display a `PD request failed!` error dialog, then select `Confirm` to return to the main menu. *(This is due to a limitation in the tester's Lua API, as there is no function available to obtain user input via the buttons outside of a menu or cancel/confirm dialog box.)*
    - If you want to quit DingoCharge, select `Exit` from the main menu.
    - If you are finished readjusting your charge settings, select `Start Charging` and complete the compatibility test process again. You will be prompted if you want to reset the charge session timer (and cumulative charge/energy counter) to zero; select `Cancel` to skip this and resume the charge session.
+   - Because the Shizuku lacks a physical power switch, charge termination or faults are handled by attempting to follow the battery's resting voltage as close as possible (default is zero +/- 10mA). It is recommended to unplug the battery from the tester as soon as charge terminates.
+     - This applies the same principle that drives DingoCharge's charge control algorithm: current flows from a higher potential to a lower potential, so a minimal voltage difference between the adapter and battery necessarily causes as little current to flow as possible.
 
 ## Licensing
 This open-source software is licensed under the MIT License:
@@ -115,7 +121,9 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-## Support
+## Troubleshooting & Support
+DingoCharge attempts to handle as many problems as it can through user-interactive prompts. If any fatal errors occur, DingoCharge versions 1.8.0 and newer will save a crash log to the Shizuku disk at `/DC4S-CrashLog.txt` and attempt to print this information on-screen.
+
 Visit the [official GitHub repository](https://github.com/ginbot86/DingoCharge-Shizuku) for more information, or to file an issue/bug report. Additional information on how to use DingoCharge can be found on the [Wiki](https://github.com/ginbot86/DingoCharge-Shizuku/wiki) there.
 
 If you do not have/want a GitHub account, the author can also be contacted via email at jasongin (at) jasongin (dot) com. No guarantees are provided that your email will necessarily be answered (in a timely manner), but a best-effort response can generally be anticipated.
