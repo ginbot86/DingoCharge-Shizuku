@@ -20,7 +20,8 @@ Version history:
        Changed cable resistance statusbar display to "disabled" instead of showing all-zero calculations (2026-01-30).
        Tweaked overvoltage clamp threshold with per-cell scaling (2026-01-30).
        Clarified session timer reset prompt (2026-01-30).
-       Clarified code sections by naming each step (2026-01-30).]]
+       Clarified code sections by naming each step (2026-01-30).
+1.8.1: Fixed issue where very low termination currents (≤ termination deadband) would prevent CV termination from triggering (2026-01-31).]]
 
 function startCharging()
   isStatusbarOverridden = false
@@ -200,7 +201,8 @@ function startCharging()
           setpointDeviation = readCurrentSigned() - regLoopCurrent
         elseif regLoopMode == 1 then -- constant-voltage mode
         -- test for transfer to idle mode upon termination
-          if (meter.readCurrent() < (regLoopCurrent - tcDeadband)) then -- delay termination until we're at the lower edge of the deadband
+          local termCurrent = regLoopCurrent > tcDeadband and (regLoopCurrent - tcDeadband) or regLoopCurrent -- delay termination until we're at the lower edge of the deadband; if offsetting by tcDeadband pushes the threshold to or below zero, then don't apply the offset
+          if (meter.readCurrent() < termCurrent) then
             isChargeStarted = false -- clear the flag that indicates a charge session was previously in progress
             chargeStage = 4
             regLoopMode = 0
