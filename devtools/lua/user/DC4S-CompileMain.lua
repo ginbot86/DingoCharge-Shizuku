@@ -3,7 +3,8 @@ https://github.com/ginbot86/DingoCharge-Shizuku November 16, 2021.
 
 Version history:
 1.0.0: Initial public release (2022-06-30).
-1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).]]
+1.6.0: Changed header to point directly to official GitHub repository (2023-12-15).
+1.8.0: Changed "Bytecode failed" error message to "File missing". (2026-01-30).]]
 
 filePath = "0:/lua/user/DingoCharge-Shizuku.lua"
 
@@ -28,7 +29,7 @@ function convertLua(filename)
       return false
     end
   else
-    screen.popHint("Bytecode failed", 1000, color.red)
+    screen.popHint("File missing", 1000, color.red)
     return false
   end
   return true
