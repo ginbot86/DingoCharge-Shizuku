@@ -1,6 +1,6 @@
 # DingoCharge for Shizuku: Comprehensive, Instrument-Level Software-Defined Battery Charging
 
-*Version 1.8.0*
+*Version 1.8.1*
 
 DingoCharge for Shizuku, simply referred to DingoCharge or DC4S hereafter, is a Lua application (implemented as a set of modular scripts) that runs on the [YK-Lab Shizuku USB-C tester/multimeter](https://yk-lab.org:666/shizuku/manual/software/manual-pc-en-us/content.html), allowing it to become a highly customizable battery charger when connected to a compatible USB-C Power Delivery (PD) adapter that supports PPS (Programmable Power Supply) functionality. This tester is available under various names, like the YK-Lab YK001, AVHzY CT-3, Power-Z KT002, ATORCH UT18, or the Helpers Lab XB001A.
 
@@ -127,4 +127,5 @@ DingoCharge attempts to handle as many problems as it can through user-interacti
 Visit the [official GitHub repository](https://github.com/ginbot86/DingoCharge-Shizuku) for more information, or to file an issue/bug report. Additional information on how to use DingoCharge can be found on the [Wiki](https://github.com/ginbot86/DingoCharge-Shizuku/wiki) there.
 
 If you do not have/want a GitHub account, the author can also be contacted via email at jasongin (at) jasongin (dot) com. No guarantees are provided that your email will necessarily be answered (in a timely manner), but a best-effort response can generally be anticipated.
+
 
